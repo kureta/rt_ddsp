@@ -73,6 +73,7 @@ target/
 
 # pyenv
 .python-version
+pyrightconfig.json
 
 # celery beat schedule file
 celerybeat-schedule
