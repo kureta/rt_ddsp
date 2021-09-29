@@ -28,7 +28,5 @@ jobs:
       - uses: actions/checkout@v2
       - name: Install tox-gh
         run: python -m pip install tox-gh
-      - name: Setup test suite
-        run: tox4 r -vv --notest
       - name: Run test suite
-        run: tox4 r --skip-pkg-install
+        run: tox
