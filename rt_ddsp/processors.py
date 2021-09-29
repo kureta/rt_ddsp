@@ -14,9 +14,10 @@ class Processor(nn.Module):
         controls = self.get_controls(*args, **kwargs)
         signal = self.get_signal(**controls)
 
-        # TODO: This returns a nested dict. Should be fixed later.
         if return_outputs_dict:
-            return dict(signal=signal, controls=controls)
+            result = controls.copy()
+            result['signal'] = signal
+            return result
         else:
             return signal
 
