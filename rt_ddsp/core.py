@@ -13,11 +13,6 @@ def torch_float32(x: Union[np.ndarray, torch.Tensor]) -> torch.Tensor:
         return torch.from_numpy(x.astype('float32'))
 
 
-def safe_log(x: torch.Tensor, eps: float = 1e-5) -> torch.Tensor:
-    safe_x = torch.where(x <= eps, eps, x)
-    return torch.log(safe_x)
-
-
 def exp_sigmoid(x: torch.Tensor,
                 exponent: float = 10.0,
                 max_value: float = 2.0,
@@ -186,16 +181,21 @@ def apply_window_to_impulse_response(impulse_response: torch.Tensor,
     return impulse_response
 
 
+def padding_end(signal, frame_size, hop_size):
+    size = signal.shape[-1]
+    diff = (size - frame_size) % hop_size
+    if diff > 0:
+        padding = hop_size - diff
+        signal = F.pad(signal, (0, padding))
+    return signal
+
+
 def frame(signal: torch.Tensor,
           frame_size: int,
           hop_size: int,
           pad_end: bool = False) -> torch.Tensor:
     if pad_end:
-        size = signal.shape[1]
-        diff = (size - frame_size) % hop_size
-        if diff > 0:
-            padding = hop_size - diff
-            signal = F.pad(signal, (0, padding))
+        signal = padding_end(signal, frame_size, hop_size)
 
     return signal.unfold(1, frame_size, hop_size)
 
