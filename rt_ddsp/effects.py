@@ -1,16 +1,19 @@
+from typing import Optional
+
 import torch
 import torch.nn as nn
 
 from rt_ddsp import core, processors
 from rt_ddsp.core import torch_float32
+from rt_ddsp.types import TensorDict
 
 
 class Reverb(processors.Processor):
     """Convolutional (FIR) reverb."""
 
     def __init__(self,
-                 reverb_length=48000,
-                 add_dry=True):
+                 reverb_length: int = 48000,
+                 add_dry: bool = True):
         """Takes neural network outputs directly as the impulse response.
 
         Args:
@@ -28,7 +31,7 @@ class Reverb(processors.Processor):
         )
 
     @staticmethod
-    def _mask_dry_ir(ir):
+    def _mask_dry_ir(ir: torch.Tensor) -> torch.Tensor:
         """Set first impulse response to zero to mask the dry signal."""
         # Make IR 2-D [batch, ir_size].
         if len(ir.shape) == 1:
@@ -40,7 +43,7 @@ class Reverb(processors.Processor):
         return torch.cat([dry_mask, ir[:, 1:]], dim=1)
 
     @staticmethod
-    def _match_dimensions(audio, ir):
+    def _match_dimensions(audio: torch.Tensor, ir: torch.Tensor) -> torch.Tensor:
         """Tile the impulse response variable to match the batch size."""
         # Add batch dimension.
         if len(ir.shape) == 1:
@@ -49,7 +52,8 @@ class Reverb(processors.Processor):
         batch_size = int(audio.shape[0])
         return torch.tile(ir, [batch_size, 1])
 
-    def get_controls(self, audio, ir=None):
+    def get_controls(self, audio: torch.Tensor,  # type: ignore[override]
+                     ir: Optional[torch.Tensor] = None) -> TensorDict:
         """Convert decoder outputs into ir response.
 
         Args:
@@ -67,7 +71,8 @@ class Reverb(processors.Processor):
 
         return {'audio': audio, 'ir': ir}
 
-    def get_signal(self, audio, ir):
+    def get_signal(self, audio: torch.Tensor,  # type: ignore[override]
+                   ir: torch.Tensor) -> torch.Tensor:
         """Apply impulse response.
 
         Args:

@@ -1,4 +1,6 @@
+# type: ignore
 import functools
+from typing import Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -6,17 +8,19 @@ import torch.nn.functional as F  # noqa
 
 from rt_ddsp import spectral_ops
 
+# TODO: This module totally sucks.
+
 
 class SpectralLoss(nn.Module):
     def __init__(self,
-                 fft_sizes=(2048, 1024, 512, 256, 128, 64),
-                 loss_type='L1',
-                 mag_weight=1.0,
-                 delta_time_weight=0.0,
-                 delta_freq_weight=0.0,
-                 cumsum_freq_weight=0.0,
-                 logmag_weight=0.0,
-                 loudness_weight=0.0):
+                 fft_sizes: Tuple[int, ...] = (2048, 1024, 512, 256, 128, 64),
+                 loss_type: str = 'L1',
+                 mag_weight: float = 1.0,
+                 delta_time_weight: float = 0.0,
+                 delta_freq_weight: float = 0.0,
+                 cumsum_freq_weight: float = 0.0,
+                 logmag_weight: float = 0.0,
+                 loudness_weight: float = 0.0):
         super().__init__()
         self.fft_sizes = fft_sizes
         self.loss_type = loss_type
@@ -32,7 +36,8 @@ class SpectralLoss(nn.Module):
             spectrogram_op = functools.partial(spectral_ops.compute_mag, size=size)
             self.spectrogram_ops.append(spectrogram_op)
 
-    def forward(self, target_audio, audio, weights=None):
+    def forward(self, target_audio: torch.Tensor, audio: torch.Tensor,
+                weights: Optional[torch.Tensor] = None) -> float:
         loss = 0.0
 
         diff = spectral_ops.diff
@@ -84,7 +89,8 @@ class SpectralLoss(nn.Module):
         return loss
 
 
-def mean_difference(target, value, loss_type='L1', weights=None):
+def mean_difference(target: torch.Tensor, value: torch.Tensor, loss_type: str = 'L1',
+                    weights: Optional[torch.Tensor] = None) -> torch.Tensor:
     difference = target - value
     weights = 1.0 if weights is None else weights
     loss_type = loss_type.upper()

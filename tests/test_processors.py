@@ -4,7 +4,7 @@ import torch
 from rt_ddsp import processors
 
 
-def test_output_is_correct():
+def test_output_is_correct() -> None:
     processor = processors.Add()
     x = torch.zeros((2, 3)) + 1.0
     y = torch.zeros((2, 3)) + 2.0

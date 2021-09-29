@@ -3,7 +3,7 @@ import torch
 from rt_ddsp import synths
 
 
-def test_harmonic_output_shape_is_correct():
+def test_harmonic_output_shape_is_correct() -> None:
     synthesizer = synths.Harmonic(
         n_samples=64000,
         sample_rate=16000,
@@ -21,7 +21,7 @@ def test_harmonic_output_shape_is_correct():
     assert [batch_size, 64000] == list(output.shape)
 
 
-def test_filtered_noise_output_shape_is_correct():
+def test_filtered_noise_output_shape_is_correct() -> None:
     synthesizer = synths.FilteredNoise(n_samples=16000)
     filter_bank_magnitudes = torch.zeros((3, 16000, 100), dtype=torch.float32) + 3.0
     output = synthesizer(filter_bank_magnitudes)

@@ -1,11 +1,18 @@
+from typing import Iterable
+
 import librosa
 import numpy as np
 import torch
 import torch.nn.functional as F  # noqa
 
-from rt_ddsp.core import padding_end, torch_float32
+from rt_ddsp.core import torch_float32
+from rt_ddsp.types import AnyTensor
 
 LD_RANGE = 120.0  # dB
+
+# TODO: Get rid of dynamic module use for the sake of type safety.
+#       In general, it might be better if we try to make everything work with both numpy
+#       arrays and pytorch tensors.
 
 
 def safe_log(x: torch.Tensor, eps: float = 1e-5) -> torch.Tensor:
@@ -13,13 +20,14 @@ def safe_log(x: torch.Tensor, eps: float = 1e-5) -> torch.Tensor:
     return torch.log(safe_x)
 
 
-def amplitude_to_db(amplitude, use_torch=False):
+def amplitude_to_db(amplitude: AnyTensor,
+                    use_torch: bool = False) -> torch.Tensor:
     """Converts amplitude to decibels."""
     lib = torch if use_torch else np
     amplitude = torch_float32(amplitude) if use_torch else amplitude
     amin = torch.tensor(1e-20) if use_torch else 1e-20  # Avoid log(0) instabilities.
 
-    db = lib.log10(lib.maximum(amin, amplitude))
+    db = lib.log10(lib.maximum(amin, amplitude))  # type: ignore
     db *= 20.0
     return db
 
@@ -50,7 +58,8 @@ def stft(audio: torch.Tensor,
     return s
 
 
-def stft_np(audio, frame_size=2048, overlap=0.75, pad_end=True):
+def stft_np(audio: np.ndarray, frame_size: int = 2048,
+            overlap: float = 0.75, pad_end: bool = True) -> np.ndarray:
     assert frame_size * overlap % 2.0 == 0.0
     hop_size = int(frame_size * (1.0 - overlap))
     is_2d = (len(audio.shape) == 2)
@@ -63,7 +72,7 @@ def stft_np(audio, frame_size=2048, overlap=0.75, pad_end=True):
         padding = ((0, 0), (0, pad)) if is_2d else ((0, pad),)
         audio = np.pad(audio, padding, 'constant')
 
-    def stft_fn(y):
+    def stft_fn(y: np.ndarray) -> np.ndarray:
         return librosa.stft(y=y,
                             n_fft=int(frame_size),
                             hop_length=hop_size,
@@ -74,17 +83,18 @@ def stft_np(audio, frame_size=2048, overlap=0.75, pad_end=True):
 
 
 # TODO(discrepancy): original has `pad_end` instead of `center`
-def compute_mag(audio, size=2048, overlap=0.75, pad_end=True):
+def compute_mag(audio: torch.Tensor, size: int = 2048, overlap: float = 0.75,
+                pad_end: bool = True) -> torch.Tensor:
     mag = torch.abs(stft(audio, frame_size=size, overlap=overlap, pad_end=pad_end))
     return torch_float32(mag)
 
 
-def tensor_slice(x: torch.Tensor, begin, size):
+def tensor_slice(x: torch.Tensor, begin: Iterable[int], size: Iterable[int]) -> torch.Tensor:
     end = [b + s for b, s in zip(begin, size)]
     return x[[slice(b, e) for b, e in zip(begin, end)]]
 
 
-def diff(x, axis=-1):
+def diff(x: torch.Tensor, axis: int = -1) -> torch.Tensor:
     shape = list(x.shape)
     ndim = len(shape)
     if axis >= ndim:
@@ -101,11 +111,11 @@ def diff(x, axis=-1):
     return d
 
 
-def pad_or_trim_to_expected_length(vector,
-                                   expected_len,
-                                   pad_value=0,
-                                   len_tolerance=20,
-                                   use_torch=False):
+def pad_or_trim_to_expected_length(vector: AnyTensor,
+                                   expected_len: int,
+                                   pad_value: float = 0.0,
+                                   len_tolerance: int = 20,
+                                   use_torch: bool = False) -> AnyTensor:
     vector = torch_float32(vector) if use_torch else vector
     expected_len = int(expected_len)
     vector_len = int(vector.shape[-1])
@@ -125,7 +135,7 @@ def pad_or_trim_to_expected_length(vector,
     # Pad missing samples
     if vector_len < expected_len:
         n_padding = expected_len - vector_len
-        vector = lib.pad(
+        vector = lib.pad(  # type: ignore
             vector, ((0, 0), (0, n_padding)),
             mode='constant',
             constant_values=pad_value)
@@ -138,13 +148,13 @@ def pad_or_trim_to_expected_length(vector,
     return vector
 
 
-def compute_loudness(audio,
-                     sample_rate=16000,
-                     frame_rate=250,
-                     n_fft=2048,
-                     range_db=LD_RANGE,
-                     ref_db=20.7,
-                     use_torch=False):
+def compute_loudness(audio: AnyTensor,
+                     sample_rate: int = 16000,
+                     frame_rate: int = 250,
+                     n_fft: int = 2048,
+                     range_db: float = LD_RANGE,
+                     ref_db: float = 20.7,
+                     use_torch: bool = False) -> AnyTensor:
     if sample_rate % frame_rate != 0:
         raise ValueError(
             f'frame_rate: {frame_rate} must evenly divide sample_rate: {sample_rate}.'
@@ -164,10 +174,10 @@ def compute_loudness(audio,
     hop_size = sample_rate // frame_rate
     overlap = 1 - hop_size / n_fft
     stft_fn = stft if use_torch else stft_np
-    s = stft_fn(audio, frame_size=n_fft, overlap=overlap, pad_end=True)
+    s = stft_fn(audio, frame_size=n_fft, overlap=overlap, pad_end=True)  # type: ignore
 
     # Compute power.
-    amplitude = lib.abs(s)
+    amplitude = lib.abs(s)  # type: ignore
     power_db = amplitude_to_db(amplitude, use_torch=use_torch)
 
     # Perceptual weighting.
@@ -177,11 +187,11 @@ def compute_loudness(audio,
 
     # Set dynamic range.
     loudness -= ref_db
-    loudness = lib.maximum(loudness, -range_db)
+    loudness = lib.maximum(loudness, -range_db)  # type: ignore
     mean = torch.mean if use_torch else np.mean
 
     # Average over frequency bins.
-    loudness = mean(loudness, axis=-1)
+    loudness = mean(loudness, axis=-1)  # type: ignore
 
     # Remove temporary batch dimension.
     loudness = loudness[0] if is_1d else loudness

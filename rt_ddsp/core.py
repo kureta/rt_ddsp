@@ -181,7 +181,7 @@ def apply_window_to_impulse_response(impulse_response: torch.Tensor,
     return impulse_response
 
 
-def padding_end(signal, frame_size, hop_size):
+def padding_end(signal: torch.Tensor, frame_size: int, hop_size: int) -> torch.Tensor:
     size = signal.shape[-1]
     diff = (size - frame_size) % hop_size
     if diff > 0:

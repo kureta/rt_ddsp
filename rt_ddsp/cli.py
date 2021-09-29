@@ -3,7 +3,7 @@ import argparse
 import sys
 
 
-def main():
+def main() -> int:
     """Console script for rt_ddsp."""
     parser = argparse.ArgumentParser()
     parser.add_argument('_', nargs='*')

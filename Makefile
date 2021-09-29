@@ -52,11 +52,15 @@ lint/flake8: ## check style with flake8
 
 lint: lint/flake8 ## check style
 
-test: ## run tests quickly with the default Python
-	pytest
+type-check:
 	mypy rt_ddsp/ tests/
 
-test-all: ## run tests on every Python version with tox
+test: ## run tests quickly with the default Python
+	pytest
+
+test-all: lint type-check test
+
+test-tox: ## run tests on every Python version with tox
 	tox
 
 coverage: ## check code coverage quickly with the default Python

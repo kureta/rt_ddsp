@@ -1,3 +1,5 @@
+from typing import Tuple
+
 import numpy as np
 import pytest
 import torch
@@ -8,7 +10,8 @@ from rt_ddsp.core import torch_float32
 
 
 # TODO: Add hypothesis tests
-def create_wave_np(batch_size, frequencies, amplitudes, seconds, n_samples):
+def create_wave_np(batch_size: int, frequencies: torch.Tensor, amplitudes: torch.Tensor,
+                   seconds: float, n_samples: int) -> np.ndarray:
     wave_np = np.zeros([batch_size, n_samples])
     time = np.linspace(0, seconds, n_samples)
     n_harmonics = int(frequencies.shape[-1])
@@ -21,8 +24,11 @@ def create_wave_np(batch_size, frequencies, amplitudes, seconds, n_samples):
     return wave_np
 
 
+HarmonicSynthSettings = Tuple[int, int, float, int]
+
+
 @pytest.fixture
-def harmonic_synth_settings():
+def harmonic_synth_settings() -> HarmonicSynthSettings:
     batch_size = 2
     sample_rate = 16000
     seconds = 1.0
@@ -39,8 +45,9 @@ def harmonic_synth_settings():
         (1, 2000, 2, 4000, 1.3),
     ]
 )
-def test_oscillator_bank_is_accurate(batch_size, fundamental_frequency,
-                                     n_harmonics, sample_rate, seconds):
+def test_oscillator_bank_is_accurate(batch_size: int, fundamental_frequency: float,
+                                     n_harmonics: int, sample_rate: int,
+                                     seconds: float) -> None:
     n_samples = int(sample_rate * seconds)
     seconds = float(n_samples) / sample_rate
     frequencies = fundamental_frequency * np.arange(1, n_harmonics + 1)
@@ -69,7 +76,9 @@ def test_oscillator_bank_is_accurate(batch_size, fundamental_frequency,
         True, False
     ]
 )
-def test_oscillator_bank_shape_is_correct(sum_sinusoids, harmonic_synth_settings):
+def test_oscillator_bank_shape_is_correct(
+        sum_sinusoids: bool,
+        harmonic_synth_settings: HarmonicSynthSettings) -> None:
     batch_size, sample_rate, seconds, n_samples = harmonic_synth_settings
     frequencies = np.array([1.0, 1.5, 2.0]) * 400.0
     amplitudes = np.ones_like(frequencies)
@@ -96,7 +105,8 @@ def test_oscillator_bank_shape_is_correct(sum_sinusoids, harmonic_synth_settings
         4000, 16000, 44100
     ]
 )
-def test_silent_above_nyquist(sample_rate, harmonic_synth_settings):
+def test_silent_above_nyquist(sample_rate: int,
+                              harmonic_synth_settings: HarmonicSynthSettings) -> None:
     batch_size, sample_rate, seconds, n_samples = harmonic_synth_settings
     nyquist = sample_rate / 2
     frequencies = torch.tensor([1.1, 1.5, 2.0]) * nyquist
@@ -121,9 +131,12 @@ def test_silent_above_nyquist(sample_rate, harmonic_synth_settings):
         (4, 2000, 0.5, 100),
     ]
 )
-def test_harmonic_synthesis_is_accurate_one_frequency(batch_size,
-                                                      fundamental_frequency, amplitude,
-                                                      n_frames, harmonic_synth_settings):
+def test_harmonic_synthesis_is_accurate_one_frequency(
+        batch_size: int,
+        fundamental_frequency: float,
+        amplitude: float,
+        n_frames: int,
+        harmonic_synth_settings: HarmonicSynthSettings) -> None:
     batch_size, sample_rate, seconds, n_samples = harmonic_synth_settings
     frequencies = fundamental_frequency * np.ones([batch_size, n_frames, 1])
     amplitudes = amplitude * np.ones([batch_size, n_frames, 1])
@@ -151,8 +164,9 @@ def test_harmonic_synthesis_is_accurate_one_frequency(batch_size,
         1, 20, 40
     ]
 )
-def test_harmonic_synthesis_is_accurate_multiple_harmonics(n_harmonics,
-                                                           harmonic_synth_settings):
+def test_harmonic_synthesis_is_accurate_multiple_harmonics(
+        n_harmonics: int,
+        harmonic_synth_settings: HarmonicSynthSettings) -> None:
     batch_size, sample_rate, seconds, n_samples = harmonic_synth_settings
     fundamental_frequency = 440.0
     amp = 0.1
@@ -188,7 +202,7 @@ def test_harmonic_synthesis_is_accurate_multiple_harmonics(n_harmonics,
 
 
 @pytest.fixture
-def audio():
+def audio() -> np.ndarray:
     audio_size = 1000
     return np.random.randn(1, audio_size).astype(np.float32)
 
@@ -200,7 +214,7 @@ def audio():
         (10, 100)
     ]
 )
-def test_fft_convolve_is_accurate(audio_size, impulse_response_size):
+def test_fft_convolve_is_accurate(audio_size: int, impulse_response_size: int) -> None:
     # Create random signals to convolve.
     audio = np.ones([1, audio_size]).astype(np.float32)
     impulse_response = np.ones([1, impulse_response_size]).astype(np.float32)
@@ -221,7 +235,7 @@ def test_fft_convolve_is_accurate(audio_size, impulse_response_size):
     'gain',
     [1.0, 0.1]
 )
-def test_delay_compensation_corrects_group_delay(gain, audio):
+def test_delay_compensation_corrects_group_delay(gain: float, audio: np.ndarray) -> None:
     # Create random signal to filter.
     output_np = gain * audio[0]
     n_frequencies = 1025
@@ -238,7 +252,7 @@ def test_delay_compensation_corrects_group_delay(gain, audio):
     assert total_difference <= threshold
 
 
-def test_fft_convolve_checks_batch_size(audio):
+def test_fft_convolve_checks_batch_size(audio: np.ndarray) -> None:
     # Create random signals to convolve with different batch sizes.
     impulse_response = torch.cat(
         [torch.from_numpy(audio), torch.from_numpy(audio)], dim=0)
@@ -251,7 +265,8 @@ def test_fft_convolve_checks_batch_size(audio):
     'padding',
     ['same', 'valid']
 )
-def test_fft_convolve_allows_valid_padding_arguments(padding, audio):
+def test_fft_convolve_allows_valid_padding_arguments(padding: str,
+                                                     audio: np.ndarray) -> None:
     result = core.fft_convolve(torch.from_numpy(audio),
                                torch.from_numpy(audio), padding=padding)
     assert result.shape[0] == 1
@@ -261,7 +276,8 @@ def test_fft_convolve_allows_valid_padding_arguments(padding, audio):
     'padding',
     ['', 'invalid']
 )
-def test_fft_convolve_disallows_invalid_padding_arguments(padding, audio):
+def test_fft_convolve_disallows_invalid_padding_arguments(padding: str,
+                                                          audio: np.ndarray) -> None:
     with pytest.raises(ValueError):
         _ = core.fft_convolve(torch.from_numpy(audio),
                               torch.from_numpy(audio), padding=padding)
@@ -271,7 +287,7 @@ def test_fft_convolve_disallows_invalid_padding_arguments(padding, audio):
     'n_frames',
     [1010, 999]
 )
-def test_fft_convolve_checks_number_of_frames(n_frames, audio):
+def test_fft_convolve_checks_number_of_frames(n_frames: int, audio: np.ndarray) -> None:
     # Create random signals to convolve with same batch sizes.
     impulse_response = torch.randn([1, n_frames, audio.shape[1]])
     with pytest.raises(ValueError):
@@ -287,7 +303,8 @@ def test_fft_convolve_checks_number_of_frames(n_frames, audio):
         (1024, 2048),
     ]
 )
-def test_frequency_impulse_response_gives_correct_size(fft_size, window_size):
+def test_frequency_impulse_response_gives_correct_size(fft_size: int,
+                                                       window_size: int) -> None:
     # Create random signals to convolve.
     n_frequencies = fft_size // 2 + 1
     magnitudes = torch.rand((1, n_frequencies))
@@ -314,8 +331,8 @@ def test_frequency_impulse_response_gives_correct_size(fft_size, window_size):
         (513, 1000, 257),
     ]
 )
-def test_frequency_filter_gives_correct_size(n_frequencies, n_frames,
-                                             window_size, audio):
+def test_frequency_filter_gives_correct_size(n_frequencies: int, n_frames: int,
+                                             window_size: int, audio: np.ndarray) -> None:
     # Create transfer function.
     if n_frames > 0:
         magnitudes = np.random.uniform(size=(1, n_frames,

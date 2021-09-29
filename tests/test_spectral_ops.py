@@ -1,3 +1,4 @@
+# type: ignore
 import numpy as np
 import pytest
 import torch
@@ -6,6 +7,8 @@ from rt_ddsp import spectral_ops
 
 pytestmark = pytest.mark.skipif(True, reason='Not properly implemented yet')
 
+
+# TODO: This module totally sucks.
 
 def gen_np_sinusoid(frequency, amp, sample_rate, audio_len_sec):
     x = np.linspace(0, audio_len_sec, int(audio_len_sec * sample_rate))

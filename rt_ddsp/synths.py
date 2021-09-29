@@ -20,7 +20,7 @@ class Harmonic(processors.Processor):
         self.normalize_below_nyquist = normalize_below_nyquist
         self.amp_resample_method = amp_resample_method
 
-    def get_controls(self,
+    def get_controls(self,  # type: ignore[override]
                      amplitudes: torch.Tensor,
                      harmonic_distribution: torch.Tensor,
                      f0_hz: torch.Tensor) -> TensorDict:
@@ -48,7 +48,7 @@ class Harmonic(processors.Processor):
                 'harmonic_distribution': harmonic_distribution,
                 'f0_hz': f0_hz}
 
-    def get_signal(self,
+    def get_signal(self,  # type: ignore[override]
                    amplitudes: torch.Tensor,
                    harmonic_distribution: torch.Tensor,
                    f0_hz: torch.Tensor) -> torch.Tensor:
@@ -74,14 +74,14 @@ class FilteredNoise(processors.Processor):
         self.scale_fn = scale_fn
         self.initial_bias = initial_bias
 
-    def get_controls(self, magnitudes):
+    def get_controls(self, magnitudes: torch.Tensor) -> TensorDict:  # type: ignore[override]
         # Scale the magnitudes.
         if self.scale_fn is not None:
             magnitudes = self.scale_fn(magnitudes + self.initial_bias)
 
         return {'magnitudes': magnitudes}
 
-    def get_signal(self, magnitudes):
+    def get_signal(self, magnitudes: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
         batch_size = int(magnitudes.shape[0])
         signal = torch.rand([batch_size, self.n_samples]) * 2.0 - 1.0
         return core.frequency_filter(signal,
