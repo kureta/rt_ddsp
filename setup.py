@@ -12,9 +12,9 @@ with open('HISTORY.rst') as history_file:
 
 requirements = [
     "wheel",
-    "torch==1.9.1+cu111",
-    "torchvision==0.10.1+cu111",
-    "torchaudio==0.9.1",
+    "torch",
+    "torchvision",
+    "torchaudio",
     "pytorch-lightning",
     "JACK-Client",
     "librosa",
