@@ -297,7 +297,6 @@ def fft_convolve(audio: torch.Tensor,
 def frequency_impulse_response(magnitudes: torch.Tensor,
                                window_size: int = 0) -> torch.Tensor:
     # Get the IR (zero-phase form).
-    # TODO: This assignment stinks.
     magnitudes = magnitudes.type(torch.complex64)
     impulse_response = torch.fft.irfft(magnitudes)
 
