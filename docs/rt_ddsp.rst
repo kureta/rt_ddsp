@@ -28,6 +28,14 @@ rt\_ddsp.effects module
    :undoc-members:
    :show-inheritance:
 
+rt\_ddsp.losses module
+----------------------
+
+.. automodule:: rt_ddsp.losses
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 rt\_ddsp.processors module
 --------------------------
 
@@ -48,6 +56,14 @@ rt\_ddsp.synths module
 ----------------------
 
 .. automodule:: rt_ddsp.synths
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+rt\_ddsp.types module
+---------------------
+
+.. automodule:: rt_ddsp.types
    :members:
    :undoc-members:
    :show-inheritance:
