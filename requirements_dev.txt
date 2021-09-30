@@ -9,3 +9,5 @@ Sphinx
 twine
 mypy
 pytest
+hypothesis
+

@@ -1,26 +1,55 @@
-from typing import Optional, Union
+from functools import wraps
+from typing import Optional, Tuple
 
 import numpy as np
 import torch
 import torch.nn.functional as F  # noqa
 from scipy import fftpack
 
+from rt_ddsp.types import AnyTensor
 
-def torch_float32(x: Union[np.ndarray, torch.Tensor]) -> torch.Tensor:
+
+def validate_tensor(x: torch.Tensor) -> torch.Tensor:
+    if not all(x.names):
+        raise ValueError('Use only named tensors.')
+    return x.type(torch.float32)
+
+
+def force_valid_tensors(func):
+    @wraps(func)
+    def wrapper_force_named_tensors(*args, **kwargs):
+        args = list(args)
+        for idx, t in enumerate(args):
+            if isinstance(t, torch.Tensor):
+                args[idx] = validate_tensor(t)
+        for k, t in kwargs.items():
+            if isinstance(t, torch.Tensor):
+                kwargs[k] = validate_tensor(t)
+        return func(*args, **kwargs)
+    return wrapper_force_named_tensors
+
+
+def torch_float32(x: AnyTensor, names: Optional[Tuple[str, ...]] = None) -> torch.Tensor:
+    # Make sure either x is either a named Tensor or names argument is not None
     if isinstance(x, torch.Tensor):
+        if not all(x.names):
+            raise ValueError('Use only named tensors!')
         return x.type(torch.float32)
     else:
-        return torch.from_numpy(x.astype('float32'))
+        if names is None or len(names) != len(x.shape):
+            raise ValueError('Number of names should match number of dimensions!')
+        return torch.tensor(x.astype('float32'), names=names)  # type: ignore
 
 
+@force_valid_tensors
 def exp_sigmoid(x: torch.Tensor,
                 exponent: float = 10.0,
                 max_value: float = 2.0,
                 threshold: float = 1e-7) -> torch.Tensor:
-    x = torch_float32(x)
     return max_value * torch.sigmoid(x) ** np.log(exponent) + threshold
 
 
+@force_valid_tensors
 def overlap_and_add(ys: torch.Tensor, hop_length: int) -> torch.Tensor:
     return torch.nn.functional.fold(
         ys.transpose(1, 2), (1, (ys.shape[1] - 1) * hop_length + ys.shape[2]),
@@ -28,29 +57,27 @@ def overlap_and_add(ys: torch.Tensor, hop_length: int) -> torch.Tensor:
     ).squeeze(1).squeeze(1)
 
 
+@force_valid_tensors
 def get_harmonic_frequencies(frequencies: torch.Tensor,
                              n_harmonics: int) -> torch.Tensor:
-    frequencies = torch_float32(frequencies)
-
     f_ratios = torch.linspace(1.0, float(n_harmonics), int(n_harmonics))
     f_ratios = f_ratios[None, None, :]
     harmonic_frequencies = frequencies * f_ratios
     return harmonic_frequencies
 
 
+@force_valid_tensors
 def remove_above_nyquist(frequency_envelopes: torch.Tensor,
                          amplitude_envelopes: torch.Tensor,
                          sample_rate: int = 16000) -> torch.Tensor:
-    frequency_envelopes = torch_float32(frequency_envelopes)
-    amplitude_envelopes = torch_float32(amplitude_envelopes)
+    mask = frequency_envelopes > sample_rate / 2.0
+    amplitude_envelopes = amplitude_envelopes.masked_fill(mask, 0.0)
 
-    amplitude_envelopes = torch.where(
-        torch.greater_equal(frequency_envelopes, sample_rate / 2.0),
-        torch.zeros_like(amplitude_envelopes), amplitude_envelopes)
     return amplitude_envelopes
 
 
 # TODO(discrepancy): using `align_corners` instead of `add_endpoint`
+@force_valid_tensors
 def resample(inputs: torch.Tensor,
              n_timesteps: int,
              method: str = 'linear',
@@ -65,13 +92,11 @@ def resample(inputs: torch.Tensor,
 
 
 # TODO(discrepancy): Removed angular cumsum.
+@force_valid_tensors
 def oscillator_bank(frequency_envelopes: torch.Tensor,
                     amplitude_envelopes: torch.Tensor,
                     sample_rate: int = 16000,
                     sum_sinusoids: bool = True) -> torch.Tensor:
-    frequency_envelopes = torch_float32(frequency_envelopes)
-    amplitude_envelopes = torch_float32(amplitude_envelopes)
-
     # Don't exceed Nyquist.
     amplitude_envelopes = remove_above_nyquist(frequency_envelopes,
                                                amplitude_envelopes,
@@ -82,19 +107,24 @@ def oscillator_bank(frequency_envelopes: torch.Tensor,
     omegas = omegas / float(sample_rate)  # rad / sample
 
     # Accumulate phase and synthesize.
-    phases = torch.cumsum(omegas, dim=1)
+    phases = omegas.cumsum('time')
+
     # TODO: Not in original
+    phases_names = phases.names
+    phases.rename_(None)
     phases %= 2 * np.pi
+    phases.rename_(*phases_names)
 
     # Convert to waveforms.
     waves = torch.sin(phases)
     audio = amplitude_envelopes * waves  # [mb, n_samples, n_sinusoids]
     if sum_sinusoids:
-        audio = torch.sum(audio, dim=-1)  # [mb, n_samples]
+        return audio.sum('features')  # [mb, n_samples]
     return audio
 
 
 # TODO(discrepancy): Missing `upsample_with_windows` function.
+@force_valid_tensors
 def harmonic_synthesis(frequencies: torch.Tensor,
                        amplitudes: torch.Tensor,
                        harmonic_shifts: Optional[torch.Tensor] = None,
@@ -102,14 +132,9 @@ def harmonic_synthesis(frequencies: torch.Tensor,
                        n_samples: int = 64000,
                        sample_rate: int = 16000,
                        amp_resample_method: str = 'linear') -> torch.Tensor:
-    frequencies = torch_float32(frequencies)
-    amplitudes = torch_float32(amplitudes)
-
     if harmonic_distribution is not None:
-        harmonic_distribution = torch_float32(harmonic_distribution)
         n_harmonics = int(harmonic_distribution.shape[-1])
     elif harmonic_shifts is not None:
-        harmonic_shifts = torch_float32(harmonic_shifts)
         n_harmonics = int(harmonic_shifts.shape[-1])
     else:
         n_harmonics = 1
@@ -138,14 +163,14 @@ def harmonic_synthesis(frequencies: torch.Tensor,
     return audio
 
 
+@force_valid_tensors
 def apply_window_to_impulse_response(impulse_response: torch.Tensor,
                                      window_size: int = 0,
                                      causal: bool = False) -> torch.Tensor:
-    impulse_response = torch_float32(impulse_response)
-
     # If IR is in causal form, put it in zero-phase form.
     if causal:
-        impulse_response = torch.fft.fftshift(impulse_response, dim=-1)
+        feature_dim = impulse_response.names.index('features')
+        impulse_response = torch.fft.fftshift(impulse_response, dim=feature_dim)
 
     # Get a window for better time/frequency resolution than rectangular.
     # Window defaults to IR size, cannot be bigger.
@@ -160,9 +185,10 @@ def apply_window_to_impulse_response(impulse_response: torch.Tensor,
         half_idx = (window_size + 1) // 2
         window = torch.cat([window[half_idx:],
                             torch.zeros([padding]),
-                            window[:half_idx]], dim=0)
+                            window[:half_idx]], dim='batch')
     else:
-        window = torch.fft.fftshift(window, dim=-1)
+        feature_dim = impulse_response.names.index('features')
+        window = torch.fft.fftshift(window, dim=feature_dim)
 
     # Apply the window, to get new IR (both in zero-phase form).
     window = torch.broadcast_to(window, impulse_response.shape)
@@ -174,13 +200,15 @@ def apply_window_to_impulse_response(impulse_response: torch.Tensor,
         second_half_end = half_idx + 1
         impulse_response = torch.cat([impulse_response[..., first_half_start:],
                                       impulse_response[..., :second_half_end]],
-                                     dim=-1)
+                                     dim='features')
     else:
-        impulse_response = torch.fft.fftshift(impulse_response, dim=-1)
+        feature_dim = impulse_response.names.index('features')
+        impulse_response = torch.fft.fftshift(impulse_response, dim=feature_dim)
 
     return impulse_response
 
 
+@force_valid_tensors
 def padding_end(signal: torch.Tensor, frame_size: int, hop_size: int) -> torch.Tensor:
     size = signal.shape[-1]
     diff = (size - frame_size) % hop_size
@@ -190,6 +218,7 @@ def padding_end(signal: torch.Tensor, frame_size: int, hop_size: int) -> torch.T
     return signal
 
 
+@force_valid_tensors
 def frame(signal: torch.Tensor,
           frame_size: int,
           hop_size: int,
@@ -211,6 +240,7 @@ def get_fft_size(frame_size: int, ir_size: int,
     return fft_size
 
 
+@force_valid_tensors
 def crop_and_compensate_delay(audio: torch.Tensor, audio_size: int,
                               ir_size: int,
                               padding: str,
@@ -235,13 +265,11 @@ def crop_and_compensate_delay(audio: torch.Tensor, audio_size: int,
     return audio[:, start:-end]
 
 
+@force_valid_tensors
 def fft_convolve(audio: torch.Tensor,
                  impulse_response: torch.Tensor,
                  padding: str = 'same',
                  delay_compensation: int = -1) -> torch.Tensor:
-    audio, impulse_response = torch_float32(audio), torch_float32(
-        impulse_response)
-
     # Get shapes of audio.
     batch_size, audio_size = audio.shape
 
@@ -294,6 +322,7 @@ def fft_convolve(audio: torch.Tensor,
                                      delay_compensation)
 
 
+@force_valid_tensors
 def frequency_impulse_response(magnitudes: torch.Tensor,
                                window_size: int = 0) -> torch.Tensor:
     # Get the IR (zero-phase form).
@@ -307,6 +336,7 @@ def frequency_impulse_response(magnitudes: torch.Tensor,
     return impulse_response
 
 
+@force_valid_tensors
 def frequency_filter(audio: torch.Tensor,
                      magnitudes: torch.Tensor,
                      window_size: int = 0,
