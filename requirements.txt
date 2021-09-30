@@ -17,6 +17,7 @@ certifi==2021.5.30
 cffi==1.14.6
 chardet==4.0.0
 charset-normalizer==2.0.6
+click==8.0.1
 colorama==0.4.4
 coverage==5.5
 cryptography==3.4.8
@@ -34,6 +35,7 @@ future==0.18.2
 google-auth==1.35.0
 google-auth-oauthlib==0.4.6
 grpcio==1.41.0
+hypothesis==6.23.1
 idna==3.2
 imagesize==1.2.0
 importlib-metadata==4.8.1
@@ -116,12 +118,14 @@ requests-toolbelt==0.9.1
 resampy==0.2.2
 rfc3986==1.5.0
 rsa==4.7.2
+-e git+ssh://git@github.com/kureta/rt_ddsp.git@e063c5571970d87089029734ee4780a093b508f9#egg=rt_ddsp
 scikit-learn==1.0
 scipy==1.7.1
 SecretStorage==3.3.1
 Send2Trash==1.8.0
 six==1.16.0
 snowballstemmer==2.1.0
+sortedcontainers==2.4.0
 SoundFile==0.10.3.post1
 Sphinx==4.2.0
 sphinxcontrib-applehelp==1.0.2
@@ -138,11 +142,11 @@ terminado==0.12.1
 testpath==0.5.0
 threadpoolctl==2.2.0
 toml==0.10.2
-torch==1.9.1
+torch==1.9.1+cu111
 torchaudio==0.9.1
 torchcrepe==0.0.15
 torchmetrics==0.5.1
-torchvision==0.10.1
+torchvision==0.10.1+cu111
 tornado==6.1
 tox==3.24.4
 tqdm==4.62.3
