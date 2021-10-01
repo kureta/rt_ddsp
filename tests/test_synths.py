@@ -47,9 +47,7 @@ def test_harmonic_synth_is_accurate() -> None:
     n_harmonics = 30
     n_frames = 1000
     batch_size = 3
-    # f0 = np.array(batch_size * [220.0])
-    # amp = np.array(batch_size * [0.6])
-    f0 = 220.0
+    f0 = 220.
     amp = 0.6
 
     harmonic = synths.Harmonic(scale_fn=None)
@@ -63,10 +61,15 @@ def test_harmonic_synth_is_accurate() -> None:
 
     expected_peak_amps = modified_controls['harmonic_distribution'][:, 0, :] * \
                          modified_controls['amplitudes'][:, 0, :]
+    expected_peak_amps = expected_peak_amps.numpy()
 
     # filter above nyquist
-    # expected_peak_freqs = expected_peak_freqs[expected_peak_freqs < sample_rate / 2]
-    # expected_peak_amps = expected_peak_amps[expected_peak_freqs < sample_rate / 2]
+    # TODO: currently we are assuming the whole batch has the same f0, harmonic, and amp values
+    #       otherwise peak_freqs and expected_peak_frames would have different sizes
+    #       later handle this by zero padding the smaller one or something like that
+    mask = expected_peak_freqs[0] < sample_rate / 2
+    expected_peak_amps = expected_peak_amps[:, mask]
+    expected_peak_freqs = expected_peak_freqs[:, mask]
 
     np.testing.assert_array_almost_equal(peak_freqs, expected_peak_freqs)
     np.testing.assert_array_almost_equal(peak_amps, expected_peak_amps)
