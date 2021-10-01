@@ -3,7 +3,7 @@ from typing import Any, Dict, Tuple
 import numpy as np
 import pytest
 import torch
-from hypothesis import given, strategies as st
+from hypothesis import given, settings, strategies as st
 from scipy.signal import find_peaks  # type: ignore
 
 from rt_ddsp import core, synths
@@ -64,7 +64,7 @@ def harmonic_synth_44_1k() -> synths.Harmonic:
     return synths.Harmonic(44100 * 2, 44100)
 
 
-# Note: using half integers as f0 to hlp peak detection. Also 32-bit floats for amp.
+# Note: using integers f0s to help peak detection. Also 32-bit floats for amp.
 @pytest.mark.parametrize(
     'harmonic_synth',
     ['harmonic_synth_16k', 'harmonic_synth_44_1k']
@@ -72,16 +72,16 @@ def harmonic_synth_44_1k() -> synths.Harmonic:
 @given(
     n_harmonics=st.integers(1, 20),
     batch_size=st.integers(1, 8),
-    double_f0=st.integers(200, 4000),
+    int_f0=st.integers(100, 5000),
     amp=st.floats(1 / 8, 1.0, width=32)
 )
 def test_harmonic_synth_is_accurate(n_harmonics: int,
                                     batch_size: int,
-                                    double_f0: int, amp: float,
+                                    int_f0: int, amp: float,
                                     harmonic_synth: synths.Harmonic,
                                     request: Any) -> None:
     n_frames = 500
-    f0 = double_f0 / 2.0
+    f0 = float(int_f0)
 
     harmonic_synth = request.getfixturevalue(harmonic_synth)
     sample_rate = harmonic_synth.sample_rate
@@ -110,8 +110,8 @@ def test_harmonic_synth_is_accurate(n_harmonics: int,
     expected_peak_amps = expected_peak_amps[:, mask]
     expected_peak_freqs = expected_peak_freqs[:, mask]
 
-    np.testing.assert_array_almost_equal(peak_freqs, expected_peak_freqs, decimal=5)
-    np.testing.assert_array_almost_equal(peak_amps, expected_peak_amps, decimal=5)
+    np.testing.assert_array_almost_equal(peak_freqs, expected_peak_freqs, decimal=3)
+    np.testing.assert_array_almost_equal(peak_amps, expected_peak_amps, decimal=3)
 
 
 def test_harmonic_output_shape_is_correct() -> None:
