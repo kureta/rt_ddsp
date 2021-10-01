@@ -3,7 +3,7 @@ from typing import Any, Dict, Tuple
 import numpy as np
 import pytest
 import torch
-from hypothesis import given, settings, strategies as st
+from hypothesis import given, strategies as st
 from scipy.signal import find_peaks  # type: ignore
 
 from rt_ddsp import core, synths
