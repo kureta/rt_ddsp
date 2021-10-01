@@ -6,9 +6,10 @@ import torch
 from hypothesis import given, strategies as st
 from scipy.signal import find_peaks  # type: ignore
 
-from rt_ddsp import synths, core
+from rt_ddsp import core, synths
 
 
+# TODO: n_frames, n_samples, and seconds are tightly coupled, at least one is redundant.
 def get_frequency_peaks(signal: torch.Tensor,
                         sample_rate: int,
                         height: float) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -62,8 +63,6 @@ def harmonic_synth_16k() -> synths.Harmonic:
 def harmonic_synth_44_1k() -> synths.Harmonic:
     return synths.Harmonic(44100 * 2, 44100)
 
-
-# TODO: n_frames, n_samples, and seconds are tightly coupled
 
 # Note: using half integers as f0 to hlp peak detection. Also 32-bit floats for amp.
 @pytest.mark.parametrize(
