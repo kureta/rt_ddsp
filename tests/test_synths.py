@@ -3,6 +3,7 @@ from typing import Any, Dict, Tuple
 import numpy as np
 import pytest
 import torch
+from hypothesis import given, strategies as st
 from scipy.signal import find_peaks  # type: ignore
 
 from rt_ddsp import synths
@@ -64,35 +65,24 @@ def harmonic_synth_44_1k() -> synths.Harmonic:
 
 # TODO: n_frames, n_samples, and seconds are tightly coupled
 
+# Note: using half integers as f0 to hlp peak detection. Also 32-bit floats for amp.
 @pytest.mark.parametrize(
-    'n_harmonics, batch_size, f0, amp, harmonic_synth',
-    [
-        (1, 1, 220., 0.6, 'harmonic_synth_16k'),
-        (1, 1, 440., 0.6, 'harmonic_synth_16k'),
-        (1, 8, 220., 0.6, 'harmonic_synth_16k'),
-        (1, 8, 440., 0.6, 'harmonic_synth_16k'),
-        (10, 1, 220., 0.6, 'harmonic_synth_16k'),
-        (10, 1, 440., 0.6, 'harmonic_synth_16k'),
-        (10, 8, 220., 0.6, 'harmonic_synth_16k'),
-        (10, 8, 440., 0.6, 'harmonic_synth_16k'),
-        (10, 8, 7000., 0.6, 'harmonic_synth_16k'),
-        (1, 1, 220., 0.6, 'harmonic_synth_44_1k'),
-        (1, 1, 440., 0.6, 'harmonic_synth_44_1k'),
-        (1, 8, 220., 0.6, 'harmonic_synth_44_1k'),
-        (1, 8, 440., 0.6, 'harmonic_synth_44_1k'),
-        (10, 1, 220., 0.6, 'harmonic_synth_44_1k'),
-        (10, 1, 220., 0.6, 'harmonic_synth_44_1k'),
-        (10, 8, 440., 0.6, 'harmonic_synth_44_1k'),
-        (10, 8, 440., 0.6, 'harmonic_synth_44_1k'),
-        (10, 8, 20000., 0.6, 'harmonic_synth_44_1k'),
-    ]
+    'harmonic_synth',
+    ['harmonic_synth_16k', 'harmonic_synth_44_1k']
+)
+@given(
+    n_harmonics=st.integers(1, 20),
+    batch_size=st.integers(1, 8),
+    double_f0=st.integers(200, 4000),
+    amp=st.floats(1/8, 1.0, width=32)
 )
 def test_harmonic_synth_is_accurate(n_harmonics: int,
                                     batch_size: int,
-                                    f0: float, amp: float,
+                                    double_f0: int, amp: float,
                                     harmonic_synth: synths.Harmonic,
                                     request: Any) -> None:
     n_frames = 500
+    f0 = double_f0 / 2.0
 
     harmonic_synth = request.getfixturevalue(harmonic_synth)
     sample_rate = harmonic_synth.sample_rate
