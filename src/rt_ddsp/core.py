@@ -5,8 +5,10 @@ import torch
 import torch.nn.functional as F  # noqa
 from scipy import fftpack
 
+from rt_ddsp.types import AnyTensor
 
-def torch_float32(x: Union[np.ndarray, torch.Tensor]) -> torch.Tensor:
+
+def torch_float32(x: AnyTensor) -> torch.Tensor:
     if isinstance(x, torch.Tensor):
         return x.type(torch.float32)
     else:
