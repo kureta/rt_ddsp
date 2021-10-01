@@ -1,25 +1,25 @@
 import numpy as np
+import pytest
 import torch
 from scipy.signal import find_peaks
 
 from rt_ddsp import synths
 
 
-def get_frequency_peaks(signal, sample_rate):
-    spectrum = np.abs(np.fft.rfft(signal.numpy()))
-    peaks, _ = find_peaks(spectrum, height=1)
+def get_frequency_peaks(signal, sample_rate, height):
+    spectrum = np.abs(np.fft.rfft(signal.numpy())) / (len(signal) / 2)
+    peaks, _ = find_peaks(spectrum, height=height)
     peak_freqs = np.fft.rfftfreq(len(signal), 1 / sample_rate)[peaks]
-    # TODO: Why * 2?
-    peak_amps = spectrum[peaks] / len(signal) * 2.
+    peak_amps = spectrum[peaks]
 
     return peak_freqs, peak_amps
 
 
-def get_batch_frequency_peaks(signal, sample_rate):
+def get_batch_frequency_peaks(signal, sample_rate, height):
     peak_freqs = []
     peak_amps = []
     for s in signal:
-        pf, pa = get_frequency_peaks(s, sample_rate)
+        pf, pa = get_frequency_peaks(s, sample_rate, height)
         peak_freqs.append(pf)
         peak_amps.append(pa)
 
@@ -31,6 +31,7 @@ def static_sawtooth_features(fundamental_frequency, base_amplitude, n_harmonics=
     amp = torch.zeros(batch_size, n_frames, 1) + base_amplitude
 
     harmonic_distribution = 1 / torch.arange(1, n_harmonics + 1)
+    # harmonic_distribution = torch.ones(n_harmonics)  # impulse features
     harmonic_distribution.view(1, 1, n_harmonics).repeat(batch_size, n_frames, 1)
 
     f0_hz = torch.zeros(batch_size, n_frames, 1) + fundamental_frequency
@@ -42,20 +43,56 @@ def static_sawtooth_features(fundamental_frequency, base_amplitude, n_harmonics=
     }
 
 
-def test_harmonic_synth_is_accurate() -> None:
-    sample_rate = 16000
-    n_harmonics = 30
-    n_frames = 1000
-    batch_size = 3
-    f0 = 220.
-    amp = 0.6
+@pytest.fixture(scope='module')
+def harmonic_synth_16k():
+    return synths.Harmonic(16000 * 2, 16000)
 
-    harmonic = synths.Harmonic(scale_fn=None)
+
+@pytest.fixture(scope='module')
+def harmonic_synth_44_1k():
+    return synths.Harmonic(44100 * 2, 44100)
+
+
+# TODO: n_frames, n_samples, and seconds are tightly coupled
+
+@pytest.mark.parametrize(
+    'n_harmonics, batch_size, f0, amp, harmonic_synth',
+    [
+        (1, 1, 220., 0.6, 'harmonic_synth_16k'),
+        (1, 1, 440., 0.6, 'harmonic_synth_16k'),
+        (1, 8, 220., 0.6, 'harmonic_synth_16k'),
+        (1, 8, 440., 0.6, 'harmonic_synth_16k'),
+        (10, 1, 220., 0.6, 'harmonic_synth_16k'),
+        (10, 1, 440., 0.6, 'harmonic_synth_16k'),
+        (10, 8, 220., 0.6, 'harmonic_synth_16k'),
+        (10, 8, 440., 0.6, 'harmonic_synth_16k'),
+        (10, 8, 7000., 0.6, 'harmonic_synth_16k'),
+        (1, 1, 220., 0.6, 'harmonic_synth_44_1k'),
+        (1, 1, 440., 0.6, 'harmonic_synth_44_1k'),
+        (1, 8, 220., 0.6, 'harmonic_synth_44_1k'),
+        (1, 8, 440., 0.6, 'harmonic_synth_44_1k'),
+        (10, 1, 220., 0.6, 'harmonic_synth_44_1k'),
+        (10, 1, 220., 0.6, 'harmonic_synth_44_1k'),
+        (10, 8, 440., 0.6, 'harmonic_synth_44_1k'),
+        (10, 8, 440., 0.6, 'harmonic_synth_44_1k'),
+        (10, 8, 20000., 0.6, 'harmonic_synth_44_1k'),
+    ]
+)
+def test_harmonic_synth_is_accurate(n_harmonics, batch_size,
+                                    f0, amp, harmonic_synth, request) -> None:
+    n_frames = 500
+
+    harmonic_synth = request.getfixturevalue(harmonic_synth)
+    sample_rate = harmonic_synth.sample_rate
     controls = static_sawtooth_features(f0, amp, n_harmonics, n_frames, batch_size)
-    signal = harmonic(**controls)
-    modified_controls = harmonic.get_controls(**controls)
+    signal = harmonic_synth(**controls)
+    modified_controls = harmonic_synth.get_controls(**controls)
 
-    peak_freqs, peak_amps = get_batch_frequency_peaks(signal, sample_rate)
+    shit_mask = modified_controls['harmonic_distribution'][0, 0] > 0.
+    height = (modified_controls['harmonic_distribution'][:, :, shit_mask] * modified_controls[
+        'amplitudes']).numpy().min() * 0.95
+    peak_freqs, peak_amps = get_batch_frequency_peaks(
+        signal, sample_rate, height)
 
     expected_peak_freqs = np.stack(batch_size * [np.arange(1, n_harmonics + 1) * f0])
 
@@ -71,8 +108,8 @@ def test_harmonic_synth_is_accurate() -> None:
     expected_peak_amps = expected_peak_amps[:, mask]
     expected_peak_freqs = expected_peak_freqs[:, mask]
 
-    np.testing.assert_array_almost_equal(peak_freqs, expected_peak_freqs)
-    np.testing.assert_array_almost_equal(peak_amps, expected_peak_amps)
+    np.testing.assert_array_almost_equal(peak_freqs, expected_peak_freqs, decimal=5)
+    np.testing.assert_array_almost_equal(peak_amps, expected_peak_amps, decimal=5)
 
 
 def test_harmonic_output_shape_is_correct() -> None:

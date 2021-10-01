@@ -7,6 +7,8 @@ from rt_ddsp.processors import TensorDict
 
 
 class Harmonic(processors.Processor):
+    # TODO: instead of n_samples this should use something like control rate and
+    #       deduce n_samples from there.
     def __init__(self,
                  n_samples: int = 64000,
                  sample_rate: int = 16000,
