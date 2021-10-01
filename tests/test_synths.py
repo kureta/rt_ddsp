@@ -6,23 +6,23 @@ import torch
 from hypothesis import given, strategies as st
 from scipy.signal import find_peaks  # type: ignore
 
-from rt_ddsp import synths
+from rt_ddsp import synths, core
 
 
 def get_frequency_peaks(signal: torch.Tensor,
                         sample_rate: int,
-                        height: float) -> Tuple[np.ndarray, np.ndarray]:
+                        height: float) -> Tuple[torch.Tensor, torch.Tensor]:
     spectrum = np.abs(np.fft.rfft(signal.numpy())) / (len(signal) / 2)
     peaks, _ = find_peaks(spectrum, height=height)
     peak_freqs = np.fft.rfftfreq(len(signal), 1 / sample_rate)[peaks]
     peak_amps = spectrum[peaks]
 
-    return peak_freqs, peak_amps
+    return core.torch_float32(peak_freqs), core.torch_float32(peak_amps)
 
 
 def get_batch_frequency_peaks(signal: torch.Tensor,
                               sample_rate: int,
-                              height: float) -> Tuple[np.ndarray, np.ndarray]:
+                              height: float) -> Tuple[torch.Tensor, torch.Tensor]:
     peak_freqs = []
     peak_amps = []
     for s in signal:
@@ -30,7 +30,7 @@ def get_batch_frequency_peaks(signal: torch.Tensor,
         peak_freqs.append(pf)
         peak_amps.append(pa)
 
-    return np.stack(peak_freqs), np.stack(peak_amps)
+    return torch.stack(peak_freqs), torch.stack(peak_amps)
 
 
 def static_sawtooth_features(fundamental_frequency: float,
@@ -74,7 +74,7 @@ def harmonic_synth_44_1k() -> synths.Harmonic:
     n_harmonics=st.integers(1, 20),
     batch_size=st.integers(1, 8),
     double_f0=st.integers(200, 4000),
-    amp=st.floats(1/8, 1.0, width=32)
+    amp=st.floats(1 / 8, 1.0, width=32)
 )
 def test_harmonic_synth_is_accurate(n_harmonics: int,
                                     batch_size: int,
@@ -96,17 +96,18 @@ def test_harmonic_synth_is_accurate(n_harmonics: int,
     peak_freqs, peak_amps = get_batch_frequency_peaks(
         signal, sample_rate, height)
 
-    expected_peak_freqs = np.stack(batch_size * [np.arange(1, n_harmonics + 1) * f0])
+    expected_peak_freqs = f0 * torch.arange(1, n_harmonics + 1)
+    expected_peak_freqs = expected_peak_freqs.repeat(batch_size, 1)
 
     dist_amps = modified_controls['harmonic_distribution'][:, 0, :]
     base_amps = modified_controls['amplitudes'][:, 0, :]
-    expected_peak_amps = (dist_amps * base_amps).numpy()
+    expected_peak_amps = (dist_amps * base_amps)
 
     # filter above nyquist
     # TODO: currently we are assuming the whole batch has the same f0, harmonic, and amp values
     #       otherwise peak_freqs and expected_peak_frames would have different sizes
     #       later handle this by zero padding the smaller one or something like that
-    mask = expected_peak_freqs[0] < sample_rate / 2
+    mask = expected_peak_freqs[0].lt(sample_rate / 2)
     expected_peak_amps = expected_peak_amps[:, mask]
     expected_peak_freqs = expected_peak_freqs[:, mask]
 
