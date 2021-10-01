@@ -3,7 +3,7 @@ from typing import Tuple
 import numpy as np
 import pytest
 import torch
-from scipy import signal
+from scipy import signal  # type: ignore
 
 from rt_ddsp import core
 from rt_ddsp.core import torch_float32

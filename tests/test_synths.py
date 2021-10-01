@@ -1,12 +1,16 @@
+from typing import Any, Dict, Tuple
+
 import numpy as np
 import pytest
 import torch
-from scipy.signal import find_peaks
+from scipy.signal import find_peaks  # type: ignore
 
 from rt_ddsp import synths
 
 
-def get_frequency_peaks(signal, sample_rate, height):
+def get_frequency_peaks(signal: torch.Tensor,
+                        sample_rate: int,
+                        height: float) -> Tuple[np.ndarray, np.ndarray]:
     spectrum = np.abs(np.fft.rfft(signal.numpy())) / (len(signal) / 2)
     peaks, _ = find_peaks(spectrum, height=height)
     peak_freqs = np.fft.rfftfreq(len(signal), 1 / sample_rate)[peaks]
@@ -15,7 +19,9 @@ def get_frequency_peaks(signal, sample_rate, height):
     return peak_freqs, peak_amps
 
 
-def get_batch_frequency_peaks(signal, sample_rate, height):
+def get_batch_frequency_peaks(signal: torch.Tensor,
+                              sample_rate: int,
+                              height: float) -> Tuple[np.ndarray, np.ndarray]:
     peak_freqs = []
     peak_amps = []
     for s in signal:
@@ -26,8 +32,11 @@ def get_batch_frequency_peaks(signal, sample_rate, height):
     return np.stack(peak_freqs), np.stack(peak_amps)
 
 
-def static_sawtooth_features(fundamental_frequency, base_amplitude, n_harmonics=30,
-                             n_frames=1000, batch_size=3):
+def static_sawtooth_features(fundamental_frequency: float,
+                             base_amplitude: float,
+                             n_harmonics: int = 30,
+                             n_frames: int = 1000,
+                             batch_size: int = 3) -> Dict[str, torch.Tensor]:
     amp = torch.zeros(batch_size, n_frames, 1) + base_amplitude
 
     harmonic_distribution = 1 / torch.arange(1, n_harmonics + 1)
@@ -44,12 +53,12 @@ def static_sawtooth_features(fundamental_frequency, base_amplitude, n_harmonics=
 
 
 @pytest.fixture(scope='module')
-def harmonic_synth_16k():
+def harmonic_synth_16k() -> synths.Harmonic:
     return synths.Harmonic(16000 * 2, 16000)
 
 
 @pytest.fixture(scope='module')
-def harmonic_synth_44_1k():
+def harmonic_synth_44_1k() -> synths.Harmonic:
     return synths.Harmonic(44100 * 2, 44100)
 
 
@@ -78,8 +87,11 @@ def harmonic_synth_44_1k():
         (10, 8, 20000., 0.6, 'harmonic_synth_44_1k'),
     ]
 )
-def test_harmonic_synth_is_accurate(n_harmonics, batch_size,
-                                    f0, amp, harmonic_synth, request) -> None:
+def test_harmonic_synth_is_accurate(n_harmonics: int,
+                                    batch_size: int,
+                                    f0: float, amp: float,
+                                    harmonic_synth: synths.Harmonic,
+                                    request: Any) -> None:
     n_frames = 500
 
     harmonic_synth = request.getfixturevalue(harmonic_synth)
@@ -96,9 +108,9 @@ def test_harmonic_synth_is_accurate(n_harmonics, batch_size,
 
     expected_peak_freqs = np.stack(batch_size * [np.arange(1, n_harmonics + 1) * f0])
 
-    expected_peak_amps = modified_controls['harmonic_distribution'][:, 0, :] * \
-                         modified_controls['amplitudes'][:, 0, :]
-    expected_peak_amps = expected_peak_amps.numpy()
+    dist_amps = modified_controls['harmonic_distribution'][:, 0, :]
+    base_amps = modified_controls['amplitudes'][:, 0, :]
+    expected_peak_amps = (dist_amps * base_amps).numpy()
 
     # filter above nyquist
     # TODO: currently we are assuming the whole batch has the same f0, harmonic, and amp values
