@@ -132,6 +132,28 @@ def test_harmonic_output_shape_is_correct() -> None:
     assert [batch_size, 64000] == list(output.shape)
 
 
+def test_filtered_noise_output_is_accurate() -> None:
+    sample_rate = 16000
+    n_samples = sample_rate * 2
+    batch_size = 4
+    n_frames = 500
+    n_bands = 100
+    max_power = 7.0
+
+    synth = synths.FilteredNoise(n_samples=n_samples)
+    filter_bank_magnitudes = torch.rand(batch_size, n_frames, n_bands) * max_power
+    signal = synth(filter_bank_magnitudes)
+    np_fft = np.stack([np.abs(np.fft.rfft(s.numpy())) for s in signal])
+    
+    magnitudes = synth.get_controls(filter_bank_magnitudes)['magnitudes'].mean(0).mean(0).numpy()
+    bands = np.stack([np.array([np.sum(j[i * (len(j) // n_bands):(i + 1) * (len(j) // n_bands)]) for i in range(n_bands)]) for j in np_fft])
+    bands = np.mean(bands, axis=0)
+
+    cosine_similarity = (magnitudes @ bands) / (np.linalg.norm(magnitudes) * np.linalg.norm(bands))
+
+    np.testing.assert_almost_equal(cosine_similarity, 1.0, decimal=3)
+
+
 def test_filtered_noise_output_shape_is_correct() -> None:
     synthesizer = synths.FilteredNoise(n_samples=16000)
     filter_bank_magnitudes = torch.zeros((3, 16000, 100), dtype=torch.float32) + 3.0
