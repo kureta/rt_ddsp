@@ -1,5 +1,5 @@
-import torch  # noqa
-import torch.nn as nn  # noqa
+import torch
+import torch.nn as nn
 
 from fftconv import fft_conv
 

@@ -1,8 +1,8 @@
 from typing import Tuple
 
 import numpy as np
-import torch  # noqa
-import torch.nn as nn  # noqa
+import torch
+import torch.nn as nn
 import torch.nn.functional as F  # noqa
 
 from fftconv import fft_conv
