@@ -1,11 +1,17 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F  # noqa
 
 from fftconv import fft_conv
 
 
 class Reverb(nn.Module):
-    def __init__(self, sample_rate=16000, duration=1.0, batch_size=1, live=False, n_channels=1):
+    def __init__(self,
+                 sample_rate: int = 16000,
+                 duration: float = 1.0,
+                 batch_size: int = 1,
+                 live: bool = False,
+                 n_channels: int = 1):
         super().__init__()
 
         self.duration = int(sample_rate * duration)
@@ -17,17 +23,19 @@ class Reverb(nn.Module):
         # ir.shape = (out_channels, in_channels, size)
         self.ir = nn.Parameter(torch.rand(n_channels, n_channels, self.duration) * 2.0 - 1.0,
                                requires_grad=True)
+
+        self.buffer: torch.Tensor
         self.register_buffer('buffer', torch.zeros(self.batch_size, n_channels, self.duration),
                              persistent=False)
 
-    def forward(self, signal):
+    def forward(self, signal: torch.Tensor) -> torch.Tensor:
         if self.live:
             with torch.no_grad():
                 return self.forward_live(signal)
         else:
             return self.forward_learn(signal)
 
-    def forward_learn(self, signal):
+    def forward_learn(self, signal: torch.Tensor) -> torch.Tensor:
         ir = self.ir.flip(-1)
         signal_length = signal.shape[-1]
 
@@ -35,7 +43,7 @@ class Reverb(nn.Module):
 
         return result[..., :signal_length]
 
-    def forward_live(self, signal):
+    def forward_live(self, signal: torch.Tensor) -> torch.Tensor:
         ir = self.ir.flip(-1)
         signal_length = signal.shape[-1]
 

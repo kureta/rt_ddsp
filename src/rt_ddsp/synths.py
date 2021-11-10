@@ -17,12 +17,17 @@ class OscillatorBank(nn.Module):
         self.sample_rate = sample_rate
         self.hop_size = hop_size
 
-        self.harmonics = nn.Parameter(
-            torch.arange(1, self.n_harmonics + 1, step=1), requires_grad=False
+        self.harmonics: torch.Tensor
+        self.register_buffer(
+            'harmonics',
+            torch.arange(1, self.n_harmonics + 1, step=1), persistent=False
         )
-        self.last_phases = nn.Parameter(
+
+        self.last_phases: torch.Tensor
+        self.register_buffer(
+            'last_phases',
             # torch.rand(batch_size, n_harmonics) * 2. * np.pi - np.pi, requires_grad=False
-            torch.zeros(batch_size, n_harmonics), requires_grad=False
+            torch.zeros(batch_size, n_harmonics), persistent=False
         )
 
     def prepare_harmonics(self, f0: torch.Tensor,
@@ -80,7 +85,11 @@ class OscillatorBank(nn.Module):
 
 # TODO: lot's of duplicated code
 class Noise(nn.Module):
-    def __init__(self, sample_rate=16000, hop_size=512, batch_size=1, live=False, n_channels=1):
+    def __init__(self, sample_rate: int = 16000,
+                 hop_size: int = 512,
+                 batch_size: int = 1,
+                 live: bool = False,
+                 n_channels: int = 1):
         super().__init__()
 
         self.sample_rate = sample_rate
@@ -91,19 +100,23 @@ class Noise(nn.Module):
 
         self.unfold = nn.Unfold(kernel_size=(1, hop_size * 2), stride=(1, hop_size),
                                 padding=(0, 0))
+
+        self.buffer: torch.Tensor
         self.register_buffer('buffer',
                              torch.zeros(self.batch_size, n_channels, 2 * self.hop_size),
                              persistent=False)
+
+        self.window: torch.Tensor
         self.register_buffer('window', torch.hann_window(hop_size * 2), persistent=False)
 
-    def forward(self, signal):
+    def forward(self, signal: torch.Tensor) -> torch.Tensor:
         if self.live:
             with torch.no_grad():
                 return self.forward_live(signal)
         else:
             return self.forward_learn(signal)
 
-    def forward_learn(self, bands):
+    def forward_learn(self, bands: torch.Tensor) -> torch.Tensor:
         nir = torch.fft.irfft(bands, dim=-1)
         nir = torch.fft.fftshift(nir, dim=-1)
 
@@ -135,7 +148,7 @@ class Noise(nn.Module):
 
         return result[..., self.hop_size:-self.hop_size]
 
-    def forward_live(self, bands):
+    def forward_live(self, bands: torch.Tensor) -> torch.Tensor:
         nir = torch.fft.irfft(bands, dim=-1)
         nir = torch.fft.fftshift(nir, dim=-1)
 
@@ -156,8 +169,7 @@ class Noise(nn.Module):
         windowed = windowed.reshape(self.batch_size, seq_len, 2 * self.hop_size)
         windowed = windowed.permute(0, 2, 1)
 
-        windowed, self.buffer[:, 0, :] = torch.cat([self.buffer.permute(0, 2, 1), windowed],
-                                                   dim=-1), windowed[:, :, -1]
+        windowed, self.buffer[:, 0, :] = torch.cat([self.buffer.permute(0, 2, 1), windowed], dim=-1), windowed[:, :, -1]  # noqa
 
         result = F.fold(windowed, (1, self.hop_size * seq_len + 2 * self.hop_size),
                         kernel_size=(1, self.hop_size * 2), stride=(1, self.hop_size),

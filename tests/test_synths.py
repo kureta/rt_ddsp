@@ -1,12 +1,8 @@
-from typing import Any, Dict, Tuple
+from typing import Dict, Tuple
 
 import numpy as np
-import pytest
 import torch
-from hypothesis import given, strategies as st, settings
 from scipy.signal import find_peaks  # type: ignore
-
-from rt_ddsp import core, synths
 
 
 # TODO: n_frames, n_samples, and seconds are tightly coupled, at least one is redundant.
@@ -18,7 +14,8 @@ def get_frequency_peaks(signal: torch.Tensor,
     peak_freqs = np.fft.rfftfreq(len(signal), 1 / sample_rate)[peaks]
     peak_amps = spectrum[peaks]
 
-    return core.torch_float32(peak_freqs), core.torch_float32(peak_amps)
+    return torch.tensor(peak_freqs, dtype=torch.float32), torch.tensor(peak_amps,
+                                                                       dtype=torch.float32)
 
 
 def get_batch_frequency_peaks(signal: torch.Tensor,
@@ -52,122 +49,3 @@ def static_sawtooth_features(fundamental_frequency: float,
         'harmonic_distribution': harmonic_distribution,
         'f0_hz': f0_hz
     }
-
-
-@pytest.fixture(scope='module')
-def harmonic_synth_16k() -> synths.Harmonic:
-    return synths.Harmonic(16000 * 2, 16000, scale_fn=None)
-
-
-@pytest.fixture(scope='module')
-def harmonic_synth_44_1k() -> synths.Harmonic:
-    return synths.Harmonic(44100 * 2, 44100, scale_fn=None)
-
-
-# Note: using integers f0s to help peak detection. Also 32-bit floats for amp.
-@pytest.mark.parametrize(
-    'harmonic_synth',
-    ['harmonic_synth_16k', 'harmonic_synth_44_1k']
-)
-@given(
-    n_harmonics=st.integers(1, 20),
-    batch_size=st.integers(1, 8),
-    int_f0=st.integers(100, 5000),
-    amp=st.floats(1 / 8, 1.0, width=32)
-)
-@settings(max_examples=10)
-def test_harmonic_synth_is_accurate(n_harmonics: int,
-                                    batch_size: int,
-                                    int_f0: int, amp: float,
-                                    harmonic_synth: synths.Harmonic,
-                                    request: Any) -> None:
-    n_frames = 500
-    f0 = float(int_f0)
-
-    harmonic_synth = request.getfixturevalue(harmonic_synth)
-    sample_rate = harmonic_synth.sample_rate
-    controls = static_sawtooth_features(f0, amp, n_harmonics, n_frames, batch_size)
-    signal = harmonic_synth(**controls)
-    modified_controls = harmonic_synth.get_controls(**controls)
-
-    peak_mask = modified_controls['harmonic_distribution'][0, 0] > 0.
-    height = (modified_controls['harmonic_distribution'][:, :, peak_mask] * modified_controls[
-        'amplitudes']).numpy().min() * 0.95
-    peak_freqs, peak_amps = get_batch_frequency_peaks(
-        signal, sample_rate, height)
-
-    expected_peak_freqs = f0 * torch.arange(1, n_harmonics + 1)
-    expected_peak_freqs = expected_peak_freqs.repeat(batch_size, 1)
-
-    dist_amps = modified_controls['harmonic_distribution'][:, 0, :]
-    base_amps = modified_controls['amplitudes'][:, 0, :]
-    expected_peak_amps = (dist_amps * base_amps)
-
-    # filter above nyquist
-    # TODO: currently we are assuming the whole batch has the same f0, harmonic, and amp values
-    #       otherwise peak_freqs and expected_peak_frames would have different sizes
-    #       later handle this by zero padding the smaller one or something like that
-    mask = expected_peak_freqs[0].lt(sample_rate / 2)
-    expected_peak_amps = expected_peak_amps[:, mask]
-    expected_peak_freqs = expected_peak_freqs[:, mask]
-
-    np.testing.assert_array_almost_equal(peak_freqs, expected_peak_freqs, decimal=3)
-    np.testing.assert_array_almost_equal(peak_amps, expected_peak_amps, decimal=3)
-
-
-def test_harmonic_output_shape_is_correct() -> None:
-    synthesizer = synths.Harmonic(
-        n_samples=64000,
-        sample_rate=16000,
-        scale_fn=None,
-        normalize_below_nyquist=True)
-    batch_size = 3
-    num_frames = 1000
-    amp = torch.zeros((batch_size, num_frames, 1), dtype=torch.float32) + 1.0
-    harmonic_distribution = torch.zeros(
-        (batch_size, num_frames, 16), dtype=torch.float32) + 1.0 / 16
-    f0_hz = torch.zeros((batch_size, num_frames, 1), dtype=torch.float32) + 16000
-
-    output = synthesizer(amp, harmonic_distribution, f0_hz)
-
-    assert [batch_size, 64000] == list(output.shape)
-
-
-@pytest.mark.skip(reason='Not working')
-@pytest.mark.parametrize(
-    'sample_rate',
-    [16000, 44100]
-)
-def test_filtered_noise_output_is_accurate(sample_rate: int) -> None:
-    sample_rate = sample_rate
-    n_samples = sample_rate * 2
-    batch_size = 4
-    n_frames = 500
-    n_bands = 100
-    max_power = 7.0
-
-    synth = synths.FilteredNoise(n_samples=n_samples)
-    filter_bank_magnitudes = torch.rand(batch_size, n_frames, n_bands) * max_power
-    signal = synth(filter_bank_magnitudes)
-    np_fft = np.stack([np.abs(np.fft.rfft(s.numpy())) for s in signal])
-
-    magnitudes = synth.get_controls(filter_bank_magnitudes)['magnitudes']
-    magnitudes = magnitudes.mean(0).mean(0).numpy()
-    bands = np.stack([np.array(
-        [np.sum(j[i * (len(j) // n_bands):(i + 1) * (len(j) // n_bands)]) for i in
-         range(n_bands)]) for j in np_fft])
-    bands = np.mean(bands, axis=0)
-
-    cosine_similarity = (magnitudes @ bands) / (
-        np.linalg.norm(magnitudes) * np.linalg.norm(bands))
-
-    np.testing.assert_almost_equal(cosine_similarity, 1.0, decimal=3)
-
-
-@pytest.mark.skip(reason='Not working')
-def test_filtered_noise_output_shape_is_correct() -> None:
-    synthesizer = synths.FilteredNoise(n_samples=16000)
-    filter_bank_magnitudes = torch.zeros((3, 16000, 100), dtype=torch.float32) + 3.0
-    output = synthesizer(filter_bank_magnitudes)
-
-    assert [3, 16000] == list(output.shape)
