@@ -1,12 +1,11 @@
-from typing import Callable, Dict, Optional, Tuple
+from typing import Tuple
 
 import numpy as np
 import torch  # noqa
 import torch.nn as nn  # noqa
 import torch.nn.functional as F  # noqa
 
-from rt_ddsp import core, processors
-from rt_ddsp.processors import TensorDict
+from fftconv import fft_conv
 
 
 class OscillatorBank(nn.Module):
@@ -66,11 +65,10 @@ class OscillatorBank(nn.Module):
             align_corners=True,
         ).permute(0, 2, 1)
 
-    def forward(self, x: Dict[str, torch.Tensor]) -> torch.Tensor:
-        f0 = x['f0_hz']
-        harm_amps = x['harmonic_distribution']
-        loudness = x['amplitudes']
-
+    def forward(self,
+                f0: torch.Tensor,
+                loudness: torch.Tensor,
+                harm_amps: torch.Tensor) -> torch.Tensor:
         harmonics, harm_amps = self.prepare_harmonics(f0, harm_amps)
         harmonics[:, 0, :] += self.last_phases  # phase offset from last sample
         phases = self.generate_phases(harmonics)
@@ -80,86 +78,90 @@ class OscillatorBank(nn.Module):
         return signal
 
 
-class Harmonic(processors.Processor):
-    # TODO: instead of n_samples this should use something like control rate and
-    #       deduce n_samples from there.
-    def __init__(self,
-                 n_samples: int = 64000,
-                 sample_rate: int = 16000,
-                 scale_fn: Optional[Callable] = core.exp_sigmoid,
-                 normalize_below_nyquist: bool = True,
-                 amp_resample_method: str = 'linear'):
+# TODO: lot's of duplicated code
+class Noise(nn.Module):
+    def __init__(self, sample_rate=16000, hop_size=512, batch_size=1, live=False, n_channels=1):
         super().__init__()
-        self.n_samples = n_samples
+
         self.sample_rate = sample_rate
-        self.scale_fn = scale_fn
-        self.normalize_below_nyquist = normalize_below_nyquist
-        self.amp_resample_method = amp_resample_method
+        self.hop_size = hop_size
+        self.batch_size = batch_size
+        self.live = live
+        self.n_channels = n_channels
 
-    def get_controls(self,  # type: ignore[override]
-                     amplitudes: torch.Tensor,
-                     harmonic_distribution: torch.Tensor,
-                     f0_hz: torch.Tensor) -> TensorDict:
-        # Scale the amplitudes.
-        if self.scale_fn is not None:
-            amplitudes = self.scale_fn(amplitudes)
-            harmonic_distribution = self.scale_fn(harmonic_distribution)
+        self.unfold = nn.Unfold(kernel_size=(1, hop_size * 2), stride=(1, hop_size),
+                                padding=(0, 0))
+        self.register_buffer('buffer',
+                             torch.zeros(self.batch_size, n_channels, 2 * self.hop_size),
+                             persistent=False)
+        self.register_buffer('window', torch.hann_window(hop_size * 2), persistent=False)
 
-        # Bandlimit the harmonic distribution.
-        if self.normalize_below_nyquist:
-            n_harmonics = int(harmonic_distribution.shape[-1])
-            harmonic_frequencies = core.get_harmonic_frequencies(f0_hz,
-                                                                 n_harmonics)
-            harmonic_distribution = core.remove_above_nyquist(
-                harmonic_frequencies,
-                harmonic_distribution,
-                self.sample_rate)
+    def forward(self, signal):
+        if self.live:
+            with torch.no_grad():
+                return self.forward_live(signal)
+        else:
+            return self.forward_learn(signal)
 
-        # Normalize
-        harmonic_distribution /= torch.sum(harmonic_distribution,
-                                           dim=-1,
-                                           keepdim=True)
+    def forward_learn(self, bands):
+        nir = torch.fft.irfft(bands, dim=-1)
+        nir = torch.fft.fftshift(nir, dim=-1)
 
-        return {'amplitudes': amplitudes,
-                'harmonic_distribution': harmonic_distribution,
-                'f0_hz': f0_hz}
+        batch_size = bands.shape[0]
+        seq_len = bands.shape[1]
 
-    def get_signal(self,  # type: ignore[override]
-                   amplitudes: torch.Tensor,
-                   harmonic_distribution: torch.Tensor,
-                   f0_hz: torch.Tensor) -> torch.Tensor:
-        signal = core.harmonic_synthesis(
-            frequencies=f0_hz,
-            amplitudes=amplitudes,
-            harmonic_distribution=harmonic_distribution,
-            n_samples=self.n_samples,
-            sample_rate=self.sample_rate,
-            amp_resample_method=self.amp_resample_method)
-        return signal
+        noise = torch.rand(batch_size, 1, 1,
+                           seq_len * self.hop_size + self.hop_size) * 2.0 - 1.0
+        framed_noise = self.unfold(noise).permute(0, 2, 1)
+        filtered = fft_conv(F.pad(framed_noise.reshape(1, -1, self.hop_size * 2),
+                                  (self.sample_rate - 1, self.sample_rate)),
+                            nir.reshape(batch_size * seq_len, 1, self.sample_rate),
+                            groups=batch_size * seq_len)
+        filtered = filtered[..., self.sample_rate // 2:-self.sample_rate // 2]
+        windowed = filtered * self.window
 
+        windowed = windowed.reshape(batch_size, seq_len, 2 * self.hop_size)
+        windowed = windowed.permute(0, 2, 1)
 
-class FilteredNoise(processors.Processor):
-    def __init__(self,
-                 n_samples: int = 64000,
-                 window_size: int = 257,
-                 scale_fn: Optional[Callable] = core.exp_sigmoid,
-                 initial_bias: float = -5.0):
-        super().__init__()
-        self.n_samples = n_samples
-        self.window_size = window_size
-        self.scale_fn = scale_fn
-        self.initial_bias = initial_bias
+        windowed = torch.cat(
+            [torch.zeros(batch_size, 2 * self.hop_size, self.n_channels), windowed],
+            dim=-1
+        )
 
-    def get_controls(self, magnitudes: torch.Tensor) -> TensorDict:  # type: ignore[override]
-        # Scale the magnitudes.
-        if self.scale_fn is not None:
-            magnitudes = self.scale_fn(magnitudes + self.initial_bias)
+        result = F.fold(windowed, (1, self.hop_size * seq_len + 2 * self.hop_size),
+                        kernel_size=(1, self.hop_size * 2), stride=(1, self.hop_size),
+                        padding=(0, 0))
+        result.squeeze_(1)
 
-        return {'magnitudes': magnitudes}
+        return result[..., self.hop_size:-self.hop_size]
 
-    def get_signal(self, magnitudes: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
-        batch_size = int(magnitudes.shape[0])
-        signal = torch.rand([batch_size, self.n_samples]) * 2.0 - 1.0
-        return core.frequency_filter(signal,
-                                     magnitudes,
-                                     window_size=self.window_size)
+    def forward_live(self, bands):
+        nir = torch.fft.irfft(bands, dim=-1)
+        nir = torch.fft.fftshift(nir, dim=-1)
+
+        seq_len = bands.shape[1]
+
+        noise = torch.rand(self.batch_size, 1, 1,
+                           seq_len * self.hop_size + self.hop_size) * 2.0 - 1.0
+        framed_noise = self.unfold(noise).permute(0, 2, 1)
+        filtered = fft_conv(
+            F.pad(framed_noise.reshape(1, -1, self.hop_size * 2),
+                  (self.sample_rate - 1, self.sample_rate)),
+            nir.reshape(self.batch_size * seq_len, 1, self.sample_rate),
+            groups=self.batch_size * seq_len
+        )
+        filtered = filtered[..., self.sample_rate // 2:-self.sample_rate // 2]
+        windowed = filtered * self.window
+
+        windowed = windowed.reshape(self.batch_size, seq_len, 2 * self.hop_size)
+        windowed = windowed.permute(0, 2, 1)
+
+        windowed, self.buffer[:, 0, :] = torch.cat([self.buffer.permute(0, 2, 1), windowed],
+                                                   dim=-1), windowed[:, :, -1]
+
+        result = F.fold(windowed, (1, self.hop_size * seq_len + 2 * self.hop_size),
+                        kernel_size=(1, self.hop_size * 2), stride=(1, self.hop_size),
+                        padding=(0, 0))
+        result.squeeze_(1)
+
+        return result[..., self.hop_size:-self.hop_size]
