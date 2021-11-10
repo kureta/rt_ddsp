@@ -29,46 +29,33 @@ class Reverb(nn.Module):
                              persistent=False)
 
     def forward(self, signal: torch.Tensor) -> torch.Tensor:
+        ir = self.ir.flip(-1)
+        signal_length = signal.shape[-1]
+
+        result = fft_conv(F.pad(signal, (self.duration - 1, self.duration)), ir)
+
         if self.live:
-            with torch.no_grad():
-                return self.forward_live(signal)
+            # Separate reverberated signal and tail
+            out = result[..., :signal_length]
+            tail = result[..., signal_length:]
+
+            # add AT MOST first signal_length samples of the old buffer to the result
+            # reverb duration might be shorter than signal length.
+            # In that case, tail of the previous signal
+            # is shorter than the current signal.
+            previous_tail = self.buffer[..., :signal_length]
+            prev_tail_len = previous_tail.shape[-1]
+            out[..., :prev_tail_len] += previous_tail
+
+            # zero out used samples of the old buffer
+            self.buffer[..., :prev_tail_len] = 0.0
+
+            # roll used samples to the end
+            self.buffer = self.buffer.roll(-prev_tail_len, dims=-1)
+
+            # add new tail to buffer
+            self.buffer += tail
+
+            return out
         else:
-            return self.forward_learn(signal)
-
-    def forward_learn(self, signal: torch.Tensor) -> torch.Tensor:
-        ir = self.ir.flip(-1)
-        signal_length = signal.shape[-1]
-
-        result = fft_conv(F.pad(signal, (self.duration - 1, self.duration)), ir)
-
-        return result[..., :signal_length]
-
-    def forward_live(self, signal: torch.Tensor) -> torch.Tensor:
-        ir = self.ir.flip(-1)
-        signal_length = signal.shape[-1]
-
-        # Do the thing
-        result = fft_conv(F.pad(signal, (self.duration - 1, self.duration)), ir)
-
-        # Separate reverberated signal and tail
-        out = result[..., :signal_length]
-        tail = result[..., signal_length:]
-
-        # add AT MOST first signal_length samples of the old buffer to the result
-        # reverb duration might be shorter than signal length.
-        # In that case, tail of the previous signal
-        # is shorter than the current signal.
-        previous_tail = self.buffer[..., :signal_length]
-        prev_tail_len = previous_tail.shape[-1]
-        out[..., :prev_tail_len] += previous_tail
-
-        # zero out used samples of the old buffer
-        self.buffer[..., :prev_tail_len] = 0.0
-
-        # roll used samples to the end
-        self.buffer = self.buffer.roll(-prev_tail_len, dims=-1)
-
-        # add new tail to buffer
-        self.buffer += tail
-
-        return out
+            return result[..., :signal_length]

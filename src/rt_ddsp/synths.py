@@ -10,12 +10,13 @@ from fftconv import fft_conv
 
 class OscillatorBank(nn.Module):
     def __init__(self, batch_size: int = 4, sample_rate: int = 16000,
-                 n_harmonics: int = 100, hop_size: int = 512):
+                 n_harmonics: int = 100, hop_size: int = 512, live: bool = False):
         super().__init__()
 
         self.n_harmonics = n_harmonics
         self.sample_rate = sample_rate
         self.hop_size = hop_size
+        self.live = live
 
         self.harmonics: torch.Tensor
         self.register_buffer(
@@ -75,9 +76,11 @@ class OscillatorBank(nn.Module):
                 loudness: torch.Tensor,
                 harm_amps: torch.Tensor) -> torch.Tensor:
         harmonics, harm_amps = self.prepare_harmonics(f0, harm_amps)
-        harmonics[:, 0, :] += self.last_phases  # phase offset from last sample
+        if self.live:
+            harmonics[:, 0, :] += self.last_phases  # phase offset from last sample
         phases = self.generate_phases(harmonics)
-        self.last_phases[:] = phases[:, -1, :]  # update phase offset
+        if self.live:
+            self.last_phases[:] = phases[:, -1, :]  # update phase offset
         signal = self.generate_signal(harm_amps, loudness, phases)
 
         return signal
@@ -109,18 +112,14 @@ class Noise(nn.Module):
         self.window: torch.Tensor
         self.register_buffer('window', torch.hann_window(hop_size * 2), persistent=False)
 
-    def forward(self, signal: torch.Tensor) -> torch.Tensor:
-        if self.live:
-            with torch.no_grad():
-                return self.forward_live(signal)
-        else:
-            return self.forward_learn(signal)
-
-    def forward_learn(self, bands: torch.Tensor) -> torch.Tensor:
+    def forward(self, bands: torch.Tensor) -> torch.Tensor:
         nir = torch.fft.irfft(bands, dim=-1)
         nir = torch.fft.fftshift(nir, dim=-1)
 
-        batch_size = bands.shape[0]
+        if self.live:
+            batch_size = self.batch_size
+        else:
+            batch_size = bands.shape[0]
         seq_len = bands.shape[1]
 
         noise = torch.rand(batch_size, 1, 1,
@@ -136,40 +135,14 @@ class Noise(nn.Module):
         windowed = windowed.reshape(batch_size, seq_len, 2 * self.hop_size)
         windowed = windowed.permute(0, 2, 1)
 
-        windowed = torch.cat(
-            [torch.zeros(batch_size, 2 * self.hop_size, self.n_channels), windowed],
-            dim=-1
-        )
-
-        result = F.fold(windowed, (1, self.hop_size * seq_len + 2 * self.hop_size),
-                        kernel_size=(1, self.hop_size * 2), stride=(1, self.hop_size),
-                        padding=(0, 0))
-        result.squeeze_(1)
-
-        return result[..., self.hop_size:-self.hop_size]
-
-    def forward_live(self, bands: torch.Tensor) -> torch.Tensor:
-        nir = torch.fft.irfft(bands, dim=-1)
-        nir = torch.fft.fftshift(nir, dim=-1)
-
-        seq_len = bands.shape[1]
-
-        noise = torch.rand(self.batch_size, 1, 1,
-                           seq_len * self.hop_size + self.hop_size) * 2.0 - 1.0
-        framed_noise = self.unfold(noise).permute(0, 2, 1)
-        filtered = fft_conv(
-            F.pad(framed_noise.reshape(1, -1, self.hop_size * 2),
-                  (self.sample_rate - 1, self.sample_rate)),
-            nir.reshape(self.batch_size * seq_len, 1, self.sample_rate),
-            groups=self.batch_size * seq_len
-        )
-        filtered = filtered[..., self.sample_rate // 2:-self.sample_rate // 2]
-        windowed = filtered * self.window
-
-        windowed = windowed.reshape(self.batch_size, seq_len, 2 * self.hop_size)
-        windowed = windowed.permute(0, 2, 1)
-
-        windowed, self.buffer[:, 0, :] = torch.cat([self.buffer.permute(0, 2, 1), windowed], dim=-1), windowed[:, :, -1]  # noqa
+        if self.live:
+            windowed, self.buffer[:, 0, :] = torch.cat([self.buffer.permute(0, 2, 1), windowed],
+                                                       dim=-1), windowed[:, :, -1]
+        else:
+            windowed = torch.cat(
+                [torch.zeros(batch_size, 2 * self.hop_size, self.n_channels), windowed],
+                dim=-1
+            )
 
         result = F.fold(windowed, (1, self.hop_size * seq_len + 2 * self.hop_size),
                         kernel_size=(1, self.hop_size * 2), stride=(1, self.hop_size),
