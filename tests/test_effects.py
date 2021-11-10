@@ -5,7 +5,7 @@ import numpy as np
 import torch
 from hypothesis import strategies as st, given, settings
 
-from rt_ddsp.effects import Reverb
+from zak.ddsp.effects import Reverb
 
 
 def get_audio(sample_rate: int, batch_size: int) -> torch.Tensor:
