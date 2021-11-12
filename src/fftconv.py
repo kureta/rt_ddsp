@@ -17,14 +17,7 @@ def complex_matmul(a: Tensor, b: Tensor, groups: int = 1) -> Tensor:
     a = a.view(a.shape[0], groups, -1, *a.shape[2:])
     b = b.view(groups, -1, *b.shape[1:])
 
-    # Compute the real and imaginary parts independently, then manually insert them
-    # into the output Tensor.  This is fairly hacky but necessary for PyTorch 1.7.0,
-    # because Autograd is not enabled for complex matrix operations yet.  Not exactly
-    # idiomatic PyTorch code, but it should work for all future versions (>= 1.7.0).
-    real = scalar_matmul(a.real, b.real) - scalar_matmul(a.imag, b.imag)
-    imag = scalar_matmul(a.imag, b.real) + scalar_matmul(a.real, b.imag)
-    c = torch.zeros(real.shape, dtype=torch.complex64, device=a.device)
-    c.real, c.imag = real, imag
+    c = scalar_matmul(a, b)
 
     return c.view(c.shape[0], -1, *c.shape[3:])
 
