@@ -24,9 +24,10 @@ class Reverb(nn.Module):
         self.ir = nn.Parameter(torch.rand(n_channels, n_channels, self.duration) * 2.0 - 1.0,
                                requires_grad=True)
 
-        self.buffer: torch.Tensor
-        self.register_buffer('buffer', torch.zeros(self.batch_size, n_channels, self.duration),
-                             persistent=False)
+        if self.live:
+            self.buffer: torch.Tensor
+            self.register_buffer('buffer', torch.zeros(self.batch_size, n_channels, self.duration),
+                                 persistent=False)
 
     def forward(self, signal: torch.Tensor) -> torch.Tensor:
         ir = self.ir.flip(-1)

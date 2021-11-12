@@ -8,6 +8,7 @@ import torch.nn.functional as F  # noqa
 from fftconv import fft_conv
 
 
+# TODO: Make stereo possible.
 class OscillatorBank(nn.Module):
     def __init__(self, batch_size: int = 4, sample_rate: int = 16000,
                  n_harmonics: int = 100, hop_size: int = 512, live: bool = False):
@@ -24,12 +25,13 @@ class OscillatorBank(nn.Module):
             torch.arange(1, self.n_harmonics + 1, step=1), persistent=False
         )
 
-        self.last_phases: torch.Tensor
-        self.register_buffer(
-            'last_phases',
-            # torch.rand(batch_size, n_harmonics) * 2. * np.pi - np.pi, requires_grad=False
-            torch.zeros(batch_size, n_harmonics), persistent=False
-        )
+        if self.live:
+            self.last_phases: torch.Tensor
+            self.register_buffer(
+                'last_phases',
+                # torch.rand(batch_size, n_harmonics) * 2. * np.pi - np.pi, requires_grad=False
+                torch.zeros(batch_size, n_harmonics), persistent=False
+            )
 
     def prepare_harmonics(self, f0: torch.Tensor,
                           harm_amps: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -83,10 +85,10 @@ class OscillatorBank(nn.Module):
             self.last_phases[:] = phases[:, -1, :]  # update phase offset
         signal = self.generate_signal(harm_amps, loudness, phases)
 
-        return signal
+        # TODO: Adding channel dimension until multi-channel is supported.
+        return signal.unsqueeze(1)
 
 
-# TODO: lot's of duplicated code
 class Noise(nn.Module):
     def __init__(self, sample_rate: int = 16000,
                  hop_size: int = 512,
@@ -104,13 +106,14 @@ class Noise(nn.Module):
         self.unfold = nn.Unfold(kernel_size=(1, hop_size * 2), stride=(1, hop_size),
                                 padding=(0, 0))
 
-        self.buffer: torch.Tensor
-        self.register_buffer('buffer',
-                             torch.zeros(self.batch_size, n_channels, 2 * self.hop_size),
-                             persistent=False)
+        if self.live:
+            self.buffer: torch.Tensor
+            self.register_buffer('buffer',
+                                 torch.zeros(self.batch_size, n_channels, 2 * self.hop_size),
+                                 persistent=False)
 
-        self.window: torch.Tensor
-        self.register_buffer('window', torch.hann_window(hop_size * 2), persistent=False)
+            self.window: torch.Tensor
+            self.register_buffer('window', torch.hann_window(hop_size * 2), persistent=False)
 
     def forward(self, bands: torch.Tensor) -> torch.Tensor:
         nir = torch.fft.irfft(bands, dim=-1)
