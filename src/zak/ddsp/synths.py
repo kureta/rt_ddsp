@@ -116,6 +116,8 @@ class Noise(nn.Module):
             self.register_buffer('window', torch.hann_window(hop_size * 2), persistent=False)
 
     def forward(self, bands: torch.Tensor) -> torch.Tensor:
+        bands = F.interpolate(bands, self.sample_rate // 2 + 1, mode='nearest')
+
         nir = torch.fft.irfft(bands, dim=-1)
         nir = torch.fft.fftshift(nir, dim=-1)
 
