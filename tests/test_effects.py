@@ -9,12 +9,12 @@ from zak.ddsp.effects import Reverb
 
 
 def get_audio(sample_rate: int, batch_size: int) -> torch.Tensor:
-    signal, _ = librosa.load(
+    signal_, _ = librosa.load(
         '/home/kureta/Music/violin/Violin Samples/yee_bach_dance_D#52.wav',
         sample_rate,
         mono=True,
     )
-    signal: torch.Tensor = torch.from_numpy(signal[None, None, :])
+    signal: torch.Tensor = torch.from_numpy(signal_[None, None, :])
 
     while signal.ndim < 3:
         signal.unsqueeze_(0)
@@ -33,7 +33,7 @@ def get_audio(sample_rate: int, batch_size: int) -> torch.Tensor:
 @settings(deadline=timedelta(milliseconds=8000))
 def test_reverb_shape(sample_rate: int, duration: float, batch_size: int, live: bool) -> None:
     reverb = Reverb(sample_rate, duration, batch_size, live)
-    reverb.ir.data[...] = 0.0
+    reverb.ir.data[:] = 0.0
     reverb.ir.data[..., 0] = 1.0
     reverb.ir.data[..., sample_rate // 2] = 1.0
 
@@ -42,7 +42,7 @@ def test_reverb_shape(sample_rate: int, duration: float, batch_size: int, live: 
         result = reverb(audio)
 
     delay = torch.zeros_like(audio)
-    delay[...] = audio
+    delay[:] = audio
     delay[..., sample_rate//2:] += audio[..., :-sample_rate//2]
 
     assert audio.shape == result.shape

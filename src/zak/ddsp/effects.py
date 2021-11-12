@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F  # noqa
+from torch import Tensor
 
 from fftconv import fft_conv
 
@@ -25,11 +26,12 @@ class Reverb(nn.Module):
                                requires_grad=True)
 
         if self.live:
-            self.buffer: torch.Tensor
-            self.register_buffer('buffer', torch.zeros(self.batch_size, n_channels, self.duration),
+            self.buffer: Tensor
+            self.register_buffer('buffer',
+                                 torch.zeros(self.batch_size, n_channels, self.duration),
                                  persistent=False)
 
-    def forward(self, signal: torch.Tensor) -> torch.Tensor:
+    def forward(self, signal: Tensor) -> Tensor:
         ir = self.ir.flip(-1)
         signal_length = signal.shape[-1]
 
@@ -52,7 +54,7 @@ class Reverb(nn.Module):
             self.buffer[..., :prev_tail_len] = 0.0
 
             # roll used samples to the end
-            self.buffer = self.buffer.roll(-prev_tail_len, dims=-1)
+            self.buffer = self.buffer.roll(-prev_tail_len, dims=-1)  # noqa
 
             # add new tail to buffer
             self.buffer += tail
