@@ -22,7 +22,7 @@ class Reverb(nn.Module):
         self.n_channels = n_channels
 
         # ir.shape = (out_channels, in_channels, size)
-        self.ir = nn.Parameter(torch.rand(n_channels, n_channels, self.duration) * 2.0 - 1.0,
+        self.ir = nn.Parameter(torch.randn(n_channels, n_channels, self.duration) * 1e-3,
                                requires_grad=True)
 
         if self.live:
