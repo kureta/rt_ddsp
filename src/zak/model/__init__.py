@@ -1,3 +1,3 @@
-from zak.model.controller import Controller
+from zak.model.decoder import Decoder
 
-__all__ = ['Controller']
+__all__ = ['Decoder']

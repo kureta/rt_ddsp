@@ -77,10 +77,7 @@ def fft_conv(
 
     # Because PyTorch computes a *one-sided* FFT, we need the final dimension to
     # have *even* length.  Just pad with one more zero if the final dimension is odd.
-    if signal.shape[-1] % 2 != 0:
-        signal_ = f.pad(signal, [0, 1])
-    else:
-        signal_ = signal
+    signal_ = f.pad(signal, [0, signal.shape[-1] % 2])
 
     kernel_padding = [
         pad

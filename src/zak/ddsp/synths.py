@@ -112,8 +112,8 @@ class Noise(nn.Module):
                                  torch.zeros(self.batch_size, n_channels, 2 * self.hop_size),
                                  persistent=False)
 
-            self.window: torch.Tensor
-            self.register_buffer('window', torch.hann_window(hop_size * 2), persistent=False)
+        self.window: torch.Tensor
+        self.register_buffer('window', torch.hann_window(hop_size * 2), persistent=False)
 
     def forward(self, bands: torch.Tensor) -> torch.Tensor:
         bands = F.interpolate(bands, self.sample_rate // 2 + 1, mode='nearest')
@@ -128,7 +128,8 @@ class Noise(nn.Module):
         seq_len = bands.shape[1]
 
         noise = torch.rand(batch_size, 1, 1,
-                           seq_len * self.hop_size + self.hop_size) * 2.0 - 1.0
+                           seq_len * self.hop_size + self.hop_size,
+                           device=bands.device) * 2.0 - 1.0
         framed_noise = self.unfold(noise).permute(0, 2, 1)
         filtered = fft_conv(F.pad(framed_noise.reshape(1, -1, self.hop_size * 2),
                                   (self.sample_rate - 1, self.sample_rate)),
@@ -145,7 +146,8 @@ class Noise(nn.Module):
                                                        dim=-1), windowed[:, :, -1]
         else:
             windowed = torch.cat(
-                [torch.zeros(batch_size, 2 * self.hop_size, self.n_channels), windowed],
+                [torch.zeros(batch_size, 2 * self.hop_size, self.n_channels,
+                             device=windowed.device), windowed],
                 dim=-1
             )
 

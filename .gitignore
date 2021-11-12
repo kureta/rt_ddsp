@@ -106,3 +106,6 @@ ENV/
 # IDE settings
 .vscode/
 .idea/
+
+# pytorch-lightning logs
+lightning_logs/

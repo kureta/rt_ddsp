@@ -2,14 +2,14 @@ import torch.nn as nn
 from torch import Tensor
 
 from zak.ddsp import Noise, OscillatorBank, Reverb
-from zak.model import Controller
+from zak.model.controller import Controller
 
 
 class Decoder(nn.Module):
     def __init__(self,
                  batch_size: int = 8,
-                 sample_rate: int = 44100,
-                 hop_size: int = 512,
+                 sample_rate: int = 48000,
+                 hop_size: int = 480,
                  n_harmonics: int = 120,
                  n_noise_filters: int = 100,
                  reverb_duration: float = 1.0,
