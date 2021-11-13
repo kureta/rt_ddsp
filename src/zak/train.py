@@ -58,7 +58,7 @@ class Zak(pl.LightningModule):
     def validation_step(self, params, batch_idx):
         audio, pitch, loudness = params
         x_hat = self.model(pitch.permute(0, 2, 1), loudness.permute(0, 2, 1))
-        print(audio.shape, x_hat.shape)
+
         # Log 4 examples to tensorboard
         for i in range(4):
             self.logger.experiment.add_audio(
