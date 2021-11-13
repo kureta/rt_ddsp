@@ -49,16 +49,12 @@ class MSSLoss(nn.Module):
     """
 
     def __init__(
-        self, n_ffts: list, alpha=1.0, overlap=0.75, eps=1e-7, use_reverb=True
+        self, n_ffts: list, alpha=1.0, overlap=0.75, eps=1e-7
     ):
         super().__init__()
         self.losses = nn.ModuleList(
             [SSSLoss(n_fft, alpha, overlap, eps) for n_fft in n_ffts]
         )
-        if use_reverb:
-            self.signal_key = "audio_reverb"
-        else:
-            self.signal_key = "audio_synth"
 
     def forward(self, x_pred, x_true):
         losses = [loss(x_pred, x_true) for loss in self.losses]
