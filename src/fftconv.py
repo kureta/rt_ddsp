@@ -94,7 +94,6 @@ def fft_conv(
     kernel_fr.imag *= -1
     output_fr = complex_matmul(signal_fr, kernel_fr, groups=groups)
     output = irfftn(output_fr, dim=tuple(range(2, signal.ndim)))
-    print(type(output))
 
     # Remove extra padded values
     crop_slices = [slice(0, output.size(0)), slice(0, output.size(1))] + [
