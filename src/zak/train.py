@@ -10,29 +10,30 @@ from zak.loss import MSSLoss
 
 # TODO: Noise goes to zero during training
 class Zak(pl.LightningModule):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.model = Decoder()
         self.loss = MSSLoss([2048, 1024, 512, 256, 128, 64])
 
-    def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=3e-4)
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5)
+    def configure_optimizers(self) -> dict:
+        optimizer = torch.optim.Adam(self.parameters(), lr=1e-4)
+        scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.99)
         return {
             'optimizer': optimizer,
             'lr_scheduler': {
                 'scheduler': scheduler,
-                'monitor': 'train_loss',
+                'interval': 'epoch',
+                'frequency': 1,
             },
         }
 
-    def on_epoch_start(self):
+    def on_epoch_start(self) -> None:
         if self.current_epoch == 0:
             f0 = torch.randn(1, 1, 1)
             amp = torch.randn(1, 1, 1)
             self.logger.experiment.add_graph(Decoder(), (f0, amp))
 
-    def training_step(self, params, _):
+    def training_step(self, params: Parameters, _batch_idx: int) -> torch.Tensor:
         audio, pitch, loudness = params
         x_hat = self.model(pitch.permute(0, 2, 1), loudness.permute(0, 2, 1))
 
@@ -55,7 +56,7 @@ class Zak(pl.LightningModule):
         )
         return loss
 
-    def validation_step(self, params, batch_idx):
+    def validation_step(self, params: Parameters, batch_idx: int) -> None:
         audio, pitch, loudness = params
         x_hat = self.model(pitch.permute(0, 2, 1), loudness.permute(0, 2, 1))
 
@@ -75,7 +76,7 @@ class Zak(pl.LightningModule):
             )
 
 
-def main():
+def main() -> None:
     dataset = Parameters()
     train_loader = DataLoader(
         dataset, batch_size=8, shuffle=True, num_workers=4

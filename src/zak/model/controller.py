@@ -84,7 +84,7 @@ class Controller(nn.Module):
 
         # one element for overall loudness
         self.dense_harmonic = nn.Linear(decoder_mlp_units, n_harmonics)
-        self.dense_loudness = nn.Linear(decoder_mlp_units, 1)
+        self.dense_loudness = nn.Linear(decoder_mlp_units + 1, 1)
         self.dense_filter = nn.Linear(decoder_mlp_units, n_noise_filters)
 
     def forward(self, f0: Tensor,
@@ -104,7 +104,8 @@ class Controller(nn.Module):
         latent = self.mlp_gru(latent)
 
         harm_amps = self.modified_sigmoid(self.dense_harmonic(latent))
-        total_harm_amp = self.modified_sigmoid(self.dense_loudness(latent))
+        total_harm_amp = self.modified_sigmoid(self.dense_loudness(torch.cat((latent, loudness),
+                                                                             dim=-1)))
 
         noise_distribution = self.dense_filter(latent)
         noise_distribution = self.modified_sigmoid(noise_distribution)

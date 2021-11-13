@@ -1,5 +1,6 @@
 from multiprocessing import Pool
 from pathlib import Path
+from typing import Tuple, Union
 
 import numpy as np
 import torchcrepe
@@ -7,7 +8,7 @@ import torch
 import librosa
 import tqdm
 
-SAMPLES_PATH = Path('~/Music/test/Test Samples').expanduser()
+SAMPLES_PATH = Path('~/Music/violin/Violin Samples').expanduser()
 SAMPLE_RATE = 48000
 HOP_SIZE = 480
 
@@ -21,7 +22,7 @@ def encode(audio: torch.Tensor,
            sample_rate: int = 48000,
            hop_size: int = 480,
            f_min: float = 190.0,
-           f_max: float = 2800.0):
+           f_max: float = 2800.0) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     # Provide a sensible frequency range for your domain (upper limit is 2006 Hz)
     # Select a model capacity--one of "tiny" or "full"
     model = 'full'
@@ -56,13 +57,13 @@ def encode(audio: torch.Tensor,
     return pitch, loudness, periodicity
 
 
-def load_and_resample(file):
+def load_and_resample(file: Union[str, Path]) -> np.ndarray:
     audio, _ = librosa.load(file, SAMPLE_RATE)
 
     return audio
 
 
-def main():
+def main() -> None:
     audio_path = SAMPLES_PATH.parent.joinpath('audio.pth')
     if audio_path.exists():
         audio = torch.load(audio_path)
