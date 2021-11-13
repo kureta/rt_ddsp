@@ -7,15 +7,15 @@ from zak.model.controller import Controller
 
 class Decoder(nn.Module):
     def __init__(self,
-                 batch_size: int = 8,
+                 batch_size: int = 6,
                  sample_rate: int = 48000,
                  hop_size: int = 480,
-                 n_harmonics: int = 120,
-                 n_noise_filters: int = 100,
+                 n_harmonics: int = 126,
+                 n_noise_filters: int = 150,
                  reverb_duration: float = 1.0,
-                 decoder_mlp_units: int = 512,
+                 decoder_mlp_units: int = 1024,
                  decoder_mlp_layers: int = 3,
-                 decoder_gru_units: int = 512,
+                 decoder_gru_units: int = 1024,
                  decoder_gru_layers: int = 1,
                  live: bool = False):
         super().__init__()

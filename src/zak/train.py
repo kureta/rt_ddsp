@@ -88,7 +88,7 @@ def main():
         logger=logger,
         log_every_n_steps=30,
         gradient_clip_val=3.0,
-        val_check_interval=0.1,
+        val_check_interval=1.0,
     )
     trainer.fit(model, train_loader, train_loader)
 

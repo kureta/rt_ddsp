@@ -7,7 +7,7 @@ import torch
 import librosa
 import tqdm
 
-SAMPLES_PATH = Path('~/Music/violin/Violin Samples').expanduser()
+SAMPLES_PATH = Path('~/Music/test/Test Samples').expanduser()
 SAMPLE_RATE = 48000
 HOP_SIZE = 480
 
