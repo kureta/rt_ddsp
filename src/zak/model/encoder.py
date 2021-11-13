@@ -81,9 +81,9 @@ def main():
     pitch, loudness, periodicity = [], [], []
     for idx in tqdm.trange(0, audio.shape[1], SAMPLE_RATE * 10):
         p, l, h = encode(audio[:, idx:idx + SAMPLE_RATE * 10])
-        pitch.append(p)
-        loudness.append(l)
-        periodicity.append(h)
+        pitch.append(p[:, :-1])
+        loudness.append(l[:, :-1])
+        periodicity.append(h[:, :-1])
     print('Encoded.')
 
     pitch = torch.cat(pitch, dim=1)
