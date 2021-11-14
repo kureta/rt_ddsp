@@ -79,7 +79,7 @@ class Zak(pl.LightningModule):
 def main() -> None:
     dataset = Parameters()
     train_loader = DataLoader(
-        dataset, batch_size=8, shuffle=True, num_workers=4
+        dataset, batch_size=4, shuffle=True, num_workers=4
     )
     model = Zak()
     logger = TensorBoardLogger('lightning_logs', default_hp_metric=False)
@@ -89,7 +89,7 @@ def main() -> None:
         logger=logger,
         log_every_n_steps=30,
         gradient_clip_val=3.0,
-        val_check_interval=1.0,
+        val_check_interval=0.2,
     )
     trainer.fit(model, train_loader, train_loader)
 

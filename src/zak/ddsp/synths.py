@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F  # noqa
 
-from fftconv import fft_conv
+from fftconv import grouped_fft_conv1d
 
 
 # TODO: Make stereo possible.
@@ -120,6 +120,7 @@ class Noise(nn.Module):
 
         nir = torch.fft.irfft(bands, dim=-1)
         nir = torch.fft.fftshift(nir, dim=-1)
+        nir = nir.unsqueeze(2)
 
         if self.live:
             batch_size = self.batch_size
@@ -127,14 +128,11 @@ class Noise(nn.Module):
             batch_size = bands.shape[0]
         seq_len = bands.shape[1]
 
-        noise = torch.rand(batch_size, 1, 1,
-                           seq_len * self.hop_size + self.hop_size,
+        noise = torch.rand(batch_size, 1, seq_len * self.hop_size + self.hop_size,
                            device=bands.device) * 2.0 - 1.0
-        framed_noise = self.unfold(noise).permute(0, 2, 1)
-        filtered = fft_conv(F.pad(framed_noise.reshape(1, -1, self.hop_size * 2),
-                                  (self.sample_rate - 1, self.sample_rate)),
-                            nir.reshape(batch_size * seq_len, 1, self.sample_rate),
-                            groups=batch_size * seq_len)
+        framed_noise = noise.unfold(-1, self.hop_size * 2, self.hop_size).transpose(1, 2)
+        filtered = grouped_fft_conv1d(F.pad(framed_noise,
+                                            (self.sample_rate - 1, self.sample_rate)), nir)
         filtered = filtered[..., self.sample_rate // 2:-self.sample_rate // 2]
         windowed = filtered * self.window
 

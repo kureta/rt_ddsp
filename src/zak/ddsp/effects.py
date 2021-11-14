@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F  # noqa
 from torch import Tensor
 
-from fftconv import fft_conv
+from fftconv import fft_conv1d
 
 
 class Reverb(nn.Module):
@@ -35,7 +35,7 @@ class Reverb(nn.Module):
         ir = self.ir.flip(-1)
         signal_length = signal.shape[-1]
 
-        result = fft_conv(F.pad(signal, (self.duration - 1, self.duration)), ir)
+        result = fft_conv1d(F.pad(signal, (self.duration - 1, self.duration)), ir)
 
         if self.live:
             # Separate reverberated signal and tail

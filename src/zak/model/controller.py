@@ -104,6 +104,7 @@ class Controller(nn.Module):
         latent = self.mlp_gru(latent)
 
         harm_amps = self.modified_sigmoid(self.dense_harmonic(latent))
+        # TODO: original implementation did not use loudness here.
         total_harm_amp = self.modified_sigmoid(self.dense_loudness(torch.cat((latent, loudness),
                                                                              dim=-1)))
 
