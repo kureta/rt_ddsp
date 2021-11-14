@@ -109,3 +109,6 @@ ENV/
 
 # pytorch-lightning logs
 lightning_logs/
+
+# torchscript files
+*.pt
