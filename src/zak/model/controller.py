@@ -50,10 +50,12 @@ class Controller(nn.Module):
                  decoder_mlp_layers: int = 3,
                  decoder_gru_units: int = 512,
                  decoder_gru_layers: int = 1,
+                 batch_size: int = 1,
                  live: bool = False):
         super().__init__()
 
         self.live = live
+        self.batch_size = batch_size
 
         self.mlp_f0 = MLP(
             n_input=1, n_units=decoder_mlp_units, n_layer=decoder_mlp_layers
@@ -71,10 +73,18 @@ class Controller(nn.Module):
             batch_first=True,
         )
 
+        # TODO: Remove this parameter and rename the buffer below.
         self.hidden = nn.Parameter(
             torch.randn(self.gru.num_layers, 1, self.gru.hidden_size),
             requires_grad=False,
         )
+
+        if self.live:
+            self.hidden_: torch.Tensor
+            self.register_buffer(
+                'hidden_',
+                torch.randn(self.gru.num_layers, self.batch_size, self.gru.hidden_size),
+            )
 
         self.mlp_gru = MLP(
             n_input=decoder_gru_units + self.num_mlp * decoder_mlp_units,
@@ -95,8 +105,8 @@ class Controller(nn.Module):
         latent = torch.cat((latent_f0, latent_loudness), dim=-1)
 
         if self.live:
-            self.hidden.to(f0.device)
-            latent, self.hidden[:] = self.gru(latent, self.hidden)
+            # self.hidden_.to(f0.device)
+            latent, self.hidden_[:] = self.gru(latent, self.hidden_)
         else:
             latent, _ = self.gru(latent)
 

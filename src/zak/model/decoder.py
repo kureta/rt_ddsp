@@ -7,7 +7,7 @@ from zak.model.controller import Controller
 
 class Decoder(nn.Module):
     def __init__(self,
-                 batch_size: int = 6,
+                 batch_size: int = 1,
                  sample_rate: int = 48000,
                  hop_size: int = 480,
                  n_harmonics: int = 126,
@@ -27,6 +27,7 @@ class Decoder(nn.Module):
             decoder_mlp_layers,
             decoder_gru_units,
             decoder_gru_layers,
+            batch_size,
             live
         )
         self.harmonics = OscillatorBank(

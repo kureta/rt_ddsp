@@ -29,8 +29,8 @@ class OscillatorBank(nn.Module):
             self.last_phases: torch.Tensor
             self.register_buffer(
                 'last_phases',
-                # torch.rand(batch_size, n_harmonics) * 2. * np.pi - np.pi, requires_grad=False
-                torch.zeros(batch_size, n_harmonics), persistent=False
+                torch.rand(batch_size, n_harmonics) * 2. * np.pi - np.pi, persistent=False
+                # torch.zeros(batch_size, n_harmonics), persistent=False
             )
 
     def prepare_harmonics(self, f0: torch.Tensor,

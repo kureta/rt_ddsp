@@ -28,7 +28,7 @@ def load_checkpoint(version: int) -> OrderedDict:
 
 
 zak = Decoder(live=True, batch_size=1)
-zak.load_state_dict(load_checkpoint(0))
+zak.load_state_dict(load_checkpoint(2), strict=False)
 zak.eval()
 for name, val in zak.named_parameters():
     val.requires_grad = False
