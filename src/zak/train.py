@@ -10,9 +10,6 @@ from zak.model import Decoder
 
 wandb_logger = WandbLogger(project="zak-ddsp", log_model='all')
 
-columns = ['original', 'generated']
-samples_table = wandb.Table(columns)
-
 
 # TODO: Noise goes to zero during training
 class Zak(pl.LightningModule):
@@ -51,12 +48,14 @@ class Zak(pl.LightningModule):
         audio, pitch, loudness = params
         x_hat = self.model(pitch.permute(0, 2, 1), loudness.permute(0, 2, 1))
 
+        columns = ['original', 'generated']
+        data = []
         # Log 4 examples to tensorboard
         for i in range(4):
-            samples_table.add_data(wandb.Audio(audio[i].squeeze().cpu(), 48000, f':step {batch_idx}'),
-                         wandb.Audio(x_hat[i].squeeze().cpu(), 48000, f':step {batch_idx}'))
+            data.append([wandb.Audio(audio[i].squeeze().cpu(), 48000, f':step {batch_idx}'),
+                         wandb.Audio(x_hat[i].squeeze().cpu(), 48000, f':step {batch_idx}')])
 
-        wandb_logger.experiment.log({'samples': samples_table})
+        wandb_logger.log_table(key='samples', columns=columns, data=data)
 
 
 def main() -> None:
