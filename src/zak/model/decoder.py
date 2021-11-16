@@ -19,7 +19,6 @@ class Decoder(nn.Module):
                  decoder_gru_layers: int = 1,
                  live: bool = False):
         super().__init__()
-        self.live = False
         self.controller = Controller(
             n_harmonics,
             n_noise_filters,
