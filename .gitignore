@@ -113,3 +113,4 @@ lightning_logs/
 # torchscript files
 *.pt
 *.ckpt
+wandb/
