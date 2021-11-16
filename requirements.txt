@@ -241,7 +241,7 @@ torch
 torchaudio
 torchcrepe
 torchmetrics
-torchvisio
+torchvision
 tornado==6.1
 tox==3.24.4
 tqdm==4.62.3
