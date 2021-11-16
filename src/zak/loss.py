@@ -22,7 +22,7 @@ class SSSLoss(nn.Module):
         self.hop_length = int(n_fft * (1 - overlap))  # 25% of the length
 
         self.stft = Spectrogram(
-            self.n_fft, hop_length=self.hop_length, power=1, center=True
+            self.n_fft, hop_length=self.hop_length, power=2.0, center=True
         )
 
     def forward(self, x_pred: torch.Tensor, x_true: torch.Tensor) -> torch.Tensor:
