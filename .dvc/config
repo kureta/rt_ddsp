@@ -1,4 +1,6 @@
 [core]
-    remote = pi
+    remote = gdrive
 ['remote "pi"']
     url = ssh://octoprint.kureta.xyz:/mnt/Pi-Disk/DVC
+['remote "gdrive"']
+    url = gdrive://1zCPbvbjTlJ-7-DdwW0TEUd1CFP2EcigK/dvcstore
