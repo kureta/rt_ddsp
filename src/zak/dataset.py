@@ -5,7 +5,7 @@ import torch
 import torch.nn.functional as F  # noqa
 from torch.utils.data import Dataset
 
-saved_dir = Path('~/Music/violin/').expanduser()
+saved_dir = Path('data/violin').expanduser()
 
 
 def load_saved(path: Path, name: str) -> torch.Tensor:
