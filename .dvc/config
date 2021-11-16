@@ -1,0 +1,4 @@
+[core]
+    remote = pi
+['remote "pi"']
+    url = ssh://octoprint.kureta.xyz:/mnt/Pi-Disk/DVC
