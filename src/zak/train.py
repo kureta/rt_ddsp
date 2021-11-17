@@ -8,7 +8,7 @@ from zak.dataset import Parameters
 from zak.loss import MSSLoss
 from zak.model import Decoder
 
-wandb_logger = WandbLogger(project="zak-ddsp", log_model='all')
+wandb_logger = WandbLogger(project="zak-ddsp", log_model=True)
 
 
 # TODO: Noise goes to zero during training
@@ -64,7 +64,6 @@ def main() -> None:
         dataset, batch_size=4, shuffle=True, num_workers=4
     )
     model = Zak()
-    wandb_logger.watch(model, log="all")
     trainer = pl.Trainer(
         gpus=1,
         limit_val_batches=1,
