@@ -52,8 +52,8 @@ class Zak(pl.LightningModule):
         data = []
         # Log 4 examples to tensorboard
         for i in range(4):
-            data.append([wandb.Audio(audio[i].squeeze().cpu(), 48000, f':step {batch_idx}'),
-                         wandb.Audio(x_hat[i].squeeze().cpu(), 48000, f':step {batch_idx}')])
+            data.append([wandb.Audio(audio[i].squeeze().cpu(), 48000, f'original'),
+                         wandb.Audio(x_hat[i].squeeze().cpu(), 48000, f'generated')])
 
         wandb_logger.log_table(key='samples', columns=columns, data=data)
 
